@@ -1,132 +1,226 @@
-import { useState } from 'react';
-import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
-import DataTable from '../../components/common/DataTable.jsx';
-import Modal from '../../components/common/Modal.jsx';
-import { DEPARTMENTS } from '../../data/mockData.js';
+import { useEffect, useState } from 'react';
+import { adminService } from '../../services/adminService.js';
+import { useInstitutes } from '../../hooks/useInstitutes.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import DataTable from '../../components/common/DataTable.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
+import Modal from '../../components/common/Modal.jsx';
+import SearchableSelect from '../../components/common/SearchableSelect.jsx';
 
-const AdminDepartmentsPage = () => {
+const DepartmentsPage = () => {
   const { toast } = useToast();
-  const [departments, setDepartments] = useState(DEPARTMENTS);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newDep, setNewDep] = useState({ name: '', code: '', students: 50, faculty: 5 });
+  const { institutes } = useInstitutes();
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    code: '',
+    description: '',
+    institute_id: '',
+  });
 
-  const handleAddDepartment = (e) => {
-    e.preventDefault();
-    if (!newDep.name || !newDep.code) return;
-    const created = {
-      id: `DEP-00${departments.length + 1}`,
-      ...newDep,
-    };
-    setDepartments([...departments, created]);
-    toast.success(`Department ${newDep.name} added successfully!`);
-    setIsAddOpen(false);
-    setNewDep({ name: '', code: '', students: 50, faculty: 5 });
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await adminService.getDepartments();
+      setDepartments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to load departments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    setCreating(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        code: form.code.trim() || null,
+        description: form.description.trim() || null,
+        institute_id: form.institute_id || null,
+      };
+      await adminService.createDepartment(payload);
+      toast.success('Department created');
+      setOpen(false);
+      setForm({ name: '', code: '', description: '', institute_id: '' });
+      load();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to create');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this department?')) return;
+    try {
+      await adminService.deleteDepartment(id);
+      toast.success('Deleted');
+      load();
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete');
+    }
   };
 
   const columns = [
-    { header: 'Department Name', accessor: 'name', render: (r) => <span className="font-semibold text-on-surface">{r.name}</span> },
-    { header: 'Branch Code', accessor: 'code', render: (r) => <span className="font-mono text-xs font-bold px-2 py-0.5 bg-surface-container-high rounded text-primary">{r.code}</span> },
-    { header: 'Enrolled Students', accessor: 'students', render: (r) => <span className="font-semibold text-on-surface">{r.students}</span> },
-    { header: 'Faculty Mentors', accessor: 'faculty', render: (r) => <span className="font-semibold text-tertiary">{r.faculty}</span> },
+    { key: 'name', label: 'Name', sortable: true },
     {
-      header: 'Actions',
-      accessor: 'id',
+      key: 'code',
+      label: 'Code',
+      render: (r) => r.code || '—',
+    },
+    {
+      key: 'institute_name',
+      label: 'Institute',
+      render: (r) => r.institute_name || '—',
+    },
+    {
+      key: 'user_count',
+      label: 'Users',
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
       render: (r) => (
         <button
-          onClick={() => toast.info(`Editing ${r.name}...`)}
-          className="px-2.5 py-1 text-xs bg-surface-container-high rounded text-on-surface hover:bg-surface-container-highest font-medium"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(r.id);
+          }}
+          className="px-3 py-1 rounded bg-error text-on-error text-xs font-semibold hover:opacity-90"
         >
-          Manage Semesters
+          Delete
         </button>
       ),
     },
   ];
 
   return (
-    <div className="flex flex-col w-full space-y-6">
-      <PageHeader
-        title="Departments & Academic Structure"
-        breadcrumb="Admin / Departments"
-        actions={[
-          {
-            label: '+ Add Department',
-            onClick: () => setIsAddOpen(true),
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      {/* Academic Year Banner */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 flex flex-col sm:flex-row items-center justify-between gap-4 border-l-4 border-primary">
+    <div className="flex flex-col w-full gap-space-lg">
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-title-lg text-title-lg font-bold text-on-surface">Active Academic Year: AY 2024–2025</h3>
-          <p className="font-body-sm text-body-sm text-on-surface-variant">Semester 8 Internship Batch active until May 2025.</p>
+          <h1 className="font-headline-xl font-bold text-on-surface">
+            Departments
+          </h1>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Manage academic departments across institutes
+          </p>
         </div>
         <button
-          onClick={() => toast.info('Academic year settings panel opened.')}
-          className="px-4 py-2 border rounded-lg font-label-md text-label-md text-primary font-bold hover:bg-surface-container"
+          onClick={() => setOpen(true)}
+          className="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md font-semibold hover:opacity-90"
         >
-          Configure Academic Terms
+          + Add Department
         </button>
       </div>
 
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-        <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Registered Departments</h3>
-        <DataTable columns={columns} data={departments} />
-      </div>
-
-      {/* Add Department Modal */}
-      {isAddOpen && (
-        <Modal
-          open={isAddOpen}
-          onClose={() => setIsAddOpen(false)}
-          title="Add New Department"
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setIsAddOpen(false)}
-                className="px-4 py-2 border rounded-lg font-label-md text-label-md text-on-surface-variant"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddDepartment}
-                className="px-6 py-2 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90"
-              >
-                Add Department
-              </button>
-            </div>
-          }
-        >
-          <form onSubmit={handleAddDepartment} className="space-y-4">
-            <div>
-              <label className="block font-label-md text-label-md text-on-surface mb-1 font-semibold">Department Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Artificial Intelligence & Data Science"
-                value={newDep.name}
-                onChange={(e) => setNewDep({ ...newDep, name: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-surface-container rounded-lg border border-transparent focus:border-primary font-body-md text-body-md"
-              />
-            </div>
-            <div>
-              <label className="block font-label-md text-label-md text-on-surface mb-1 font-semibold">Department Code</label>
-              <input
-                type="text"
-                placeholder="e.g. AI-DS"
-                value={newDep.code}
-                onChange={(e) => setNewDep({ ...newDep, code: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-surface-container rounded-lg border border-transparent focus:border-primary font-body-md text-body-md"
-              />
-            </div>
-          </form>
-        </Modal>
+      {!loading && departments.length === 0 ? (
+        <EmptyState
+          icon="account_tree"
+          title="No departments yet"
+          description="Create your first department to organize faculty and students."
+          action={{
+            label: 'Add Department',
+            icon: 'add_circle',
+            onClick: () => setOpen(true),
+          }}
+        />
+      ) : (
+        <DataTable columns={columns} data={departments} loading={loading} />
       )}
+
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Add Department"
+        footer={
+          <>
+            <button
+              onClick={() => setOpen(false)}
+              className="px-4 py-2 bg-surface-container text-on-surface font-label-md font-semibold rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="px-4 py-2 bg-primary text-on-primary font-label-md font-semibold rounded-lg disabled:opacity-60"
+            >
+              {creating ? 'Creating…' : 'Create'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block font-label-md font-semibold text-on-surface mb-2">
+              Name *
+            </label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Computer Science & Engineering"
+              className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+            />
+          </div>
+
+          <div>
+            <label className="block font-label-md font-semibold text-on-surface mb-2">
+              Code
+            </label>
+            <input
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              placeholder="CSE"
+              className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+            />
+          </div>
+
+          <div>
+            <label className="block font-label-md font-semibold text-on-surface mb-2">
+              Institute (optional)
+            </label>
+            <SearchableSelect
+              options={[
+                { value: '', label: '— None —' },
+                ...institutes.map((i) => ({
+                  value: i.id,
+                  label: i.name,
+                  sublabel: [i.city, i.state].filter(Boolean).join(', '),
+                })),
+              ]}
+              value={form.institute_id}
+              onChange={(v) => setForm({ ...form, institute_id: v })}
+              placeholder="Select institute (optional)"
+            />
+          </div>
+
+          <div>
+            <label className="block font-label-md font-semibold text-on-surface mb-2">
+              Description
+            </label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container resize-none"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
 
-export default AdminDepartmentsPage;
+export default DepartmentsPage;

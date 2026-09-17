@@ -1,131 +1,142 @@
-import { useState } from 'react';
-import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
-import { POLICIES } from '../../data/mockData.js';
+import { useEffect, useState } from 'react';
+import { adminService } from '../../services/adminService.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import Skeleton from '../../components/common/Skeleton.jsx';
 
-const AdminPoliciesPage = () => {
+const PoliciesPage = () => {
   const { toast } = useToast();
-  const [policies, setPolicies] = useState(POLICIES);
-  const [isSaving, setIsSaving] = useState(false);
+  const [policies, setPolicies] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = (sectionName) => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success(`${sectionName} policy settings saved successfully.`);
-    }, 500);
+  useEffect(() => {
+    adminService
+      .getPolicies()
+      .then((data) => {
+        const map = {};
+        (data || []).forEach((p) => { map[p.key] = p.value; });
+        setPolicies(map);
+      })
+      .catch((err) => toast.error(err?.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const set = (key, value) =>
+    setPolicies((prev) => ({ ...prev, [key]: value }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await adminService.updatePolicies(policies);
+      toast.success('Policies saved');
+    } catch (err) {
+      toast.error(err?.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
+  if (loading) return <Skeleton variant="card" count={2} />;
+
+  const num = (v) => Number(v) || 0;
+
   return (
-    <div className="flex flex-col w-full space-y-6">
-      <PageHeader
-        title="Institutional Policies & Thresholds"
-        breadcrumb="Admin / Policies"
-      />
+    <div className="flex flex-col w-full gap-space-lg">
+      <div>
+        <h1 className="font-headline-xl font-bold text-on-surface">System Policies</h1>
+        <p className="font-body-md text-on-surface-variant mt-1">
+          Platform-wide thresholds and AI configuration
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Attendance & Compliance Policy */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-surface-container-high pb-3">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Attendance & Compliance</h3>
-            <span className="material-symbols-outlined text-primary">fact_check</span>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg">
+          <h3 className="font-headline-sm font-bold text-on-surface mb-6">
+            Attendance & Compliance
+          </h3>
 
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between font-label-md text-label-md font-semibold text-on-surface mb-1">
-                <span>Minimum Required Attendance (%)</span>
-                <span className="text-primary font-bold">{policies.minAttendance}%</span>
-              </div>
-              <input
-                type="range"
-                min="60"
-                max="90"
-                value={policies.minAttendance}
-                onChange={(e) => setPolicies({ ...policies, minAttendance: Number(e.target.value) })}
-                className="w-full h-2 bg-surface-container-high rounded-lg cursor-pointer accent-primary"
-              />
+          <div className="mb-6">
+            <div className="flex justify-between mb-2">
+              <span className="font-body-md text-on-surface">Minimum Required Attendance (%)</span>
+              <span className="font-label-md font-semibold text-primary">
+                {num(policies['attendance.min_percent'])}%
+              </span>
             </div>
-
-            <div>
-              <div className="flex justify-between font-label-md text-label-md font-semibold text-on-surface mb-1">
-                <span>Max Allowed Consecutive Late Reports</span>
-                <span className="text-primary font-bold">{policies.maxLateReports}</span>
-              </div>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={policies.maxLateReports}
-                onChange={(e) => setPolicies({ ...policies, maxLateReports: Number(e.target.value) })}
-                className="w-full px-3 py-2 bg-surface-container rounded-lg font-body-md text-body-md"
-              />
-            </div>
+            <input
+              type="range" min="0" max="100"
+              value={num(policies['attendance.min_percent'])}
+              onChange={(e) => set('attendance.min_percent', parseInt(e.target.value))}
+              className="w-full"
+            />
           </div>
 
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={() => handleSave('Attendance & Compliance')}
-              disabled={isSaving}
-              className="px-4 py-2 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90"
-            >
-              Save Policy
-            </button>
+          <div>
+            <label className="block font-body-md text-on-surface mb-2">
+              Max Allowed Consecutive Late Reports
+            </label>
+            <input
+              type="number" min="0"
+              value={num(policies['attendance.max_consecutive_late'])}
+              onChange={(e) => set('attendance.max_consecutive_late', parseInt(e.target.value) || 0)}
+              className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+            />
           </div>
+
+          <button
+            onClick={save}
+            disabled={saving}
+            className="mt-6 px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md font-semibold disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save Policies'}
+          </button>
         </div>
 
-        {/* AI & Automation Thresholds */}
-        <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-surface-container-high pb-3">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">AI Engine & Risk Engine Controls</h3>
-            <span className="material-symbols-outlined text-amber-500">auto_awesome</span>
-          </div>
+        <div className="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg">
+          <h3 className="font-headline-sm font-bold text-on-surface mb-6">
+            AI Engine & Risk Controls
+          </h3>
 
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between font-label-md text-label-md font-semibold text-on-surface mb-1">
-                <span>AI Skill Match Automation Level (%)</span>
-                <span className="text-amber-600 font-bold">{policies.aiAutomationLevel}%</span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="100"
-                value={policies.aiAutomationLevel}
-                onChange={(e) => setPolicies({ ...policies, aiAutomationLevel: Number(e.target.value) })}
-                className="w-full h-2 bg-surface-container-high rounded-lg cursor-pointer accent-amber-500"
-              />
+          <div className="mb-6">
+            <div className="flex justify-between mb-2">
+              <span className="font-body-md text-on-surface">AI Skill Match Automation (%)</span>
+              <span className="font-label-md font-semibold text-secondary">
+                {num(policies['ai.skill_match_threshold'])}%
+              </span>
             </div>
+            <input
+              type="range" min="0" max="100"
+              value={num(policies['ai.skill_match_threshold'])}
+              onChange={(e) => set('ai.skill_match_threshold', parseInt(e.target.value))}
+              className="w-full"
+            />
+          </div>
 
-            <div>
-              <div className="flex justify-between font-label-md text-label-md font-semibold text-on-surface mb-1">
-                <span>Auto-Approve Threshold Score</span>
-                <span className="text-amber-600 font-bold">{policies.autoApproveThreshold}%</span>
-              </div>
-              <input
-                type="range"
-                min="80"
-                max="98"
-                value={policies.autoApproveThreshold}
-                onChange={(e) => setPolicies({ ...policies, autoApproveThreshold: Number(e.target.value) })}
-                className="w-full h-2 bg-surface-container-high rounded-lg cursor-pointer accent-amber-500"
-              />
+          <div className="mb-6">
+            <div className="flex justify-between mb-2">
+              <span className="font-body-md text-on-surface">Auto-Approve Threshold Score</span>
+              <span className="font-label-md font-semibold text-secondary">
+                {num(policies['ai.auto_approve_threshold'])}%
+              </span>
             </div>
+            <input
+              type="range" min="0" max="100"
+              value={num(policies['ai.auto_approve_threshold'])}
+              onChange={(e) => set('ai.auto_approve_threshold', parseInt(e.target.value))}
+              className="w-full"
+            />
           </div>
 
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={() => handleSave('AI & Automation')}
-              disabled={isSaving}
-              className="px-4 py-2 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90"
-            >
-              Save AI Thresholds
-            </button>
-          </div>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="px-5 py-2.5 bg-primary text-on-primary rounded-lg font-label-md font-semibold disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save AI Thresholds'}
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-export default AdminPoliciesPage;
+export default PoliciesPage;
