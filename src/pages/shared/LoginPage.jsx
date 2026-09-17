@@ -4,6 +4,10 @@ import { useAuth } from '../../store/AuthContext.jsx';
 import { ROUTES } from '../../constants/routes.js';
 import { roleDashboard } from '../../utils/roleGuard.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import { supabase } from '../../services/supabase.js';
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -17,12 +21,27 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const { user } = await login(email, password);
-      const role = user?.user_metadata?.role;
+      await login(email, password);
+
+      // Wait for supabase session to be available
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) throw new Error('Session not created');
+
+      // Ask backend for authoritative role
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch user profile');
+
+      const me = await res.json();
       toast.success('Welcome back!');
-      navigate(roleDashboard(role));
+      navigate(roleDashboard(me.role), { replace: true });
     } catch (err) {
-      toast.error(err.message || 'Login failed');
+      toast.error(err?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -35,9 +54,12 @@ const LoginPage = () => {
           <div className="w-16 h-16 rounded-2xl bg-on-primary/20 flex items-center justify-center mx-auto mb-6">
             <span className="material-symbols-outlined text-[36px]">sync_alt</span>
           </div>
-          <h1 className="font-headline-xl text-headline-xl font-bold mb-4">InternSync Portal</h1>
+          <h1 className="font-headline-xl text-headline-xl font-bold mb-4">
+            InternSync Portal
+          </h1>
           <p className="font-body-lg text-body-lg opacity-80 leading-relaxed">
-            AICTE-compliant internship management platform with AI-powered matching, real-time monitoring, and dual-mentor evaluation.
+            AICTE-compliant internship management platform with AI-powered
+            matching, real-time monitoring, and dual-mentor evaluation.
           </p>
         </div>
       </div>
@@ -45,13 +67,19 @@ const LoginPage = () => {
       <div className="flex-1 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md">
           <div className="mb-8">
-            <h2 className="font-headline-lg text-headline-lg font-bold text-on-surface">Welcome back</h2>
-            <p className="font-body-md text-body-md text-on-surface-variant mt-1">Sign in to your InternSync account</p>
+            <h2 className="font-headline-lg text-headline-lg font-bold text-on-surface">
+              Welcome back
+            </h2>
+            <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+              Sign in to your InternSync account
+            </p>
           </div>
 
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-1.5">
-              <label className="font-label-md text-label-md font-semibold text-on-surface">Email</label>
+              <label className="font-label-md text-label-md font-semibold text-on-surface">
+                Email
+              </label>
               <input
                 type="email"
                 value={email}
@@ -62,7 +90,9 @@ const LoginPage = () => {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="font-label-md text-label-md font-semibold text-on-surface">Password</label>
+              <label className="font-label-md text-label-md font-semibold text-on-surface">
+                Password
+              </label>
               <input
                 type="password"
                 value={password}
@@ -82,10 +112,16 @@ const LoginPage = () => {
           </form>
 
           <div className="flex items-center justify-between mt-4">
-            <Link to={ROUTES.FORGOT_PASSWORD} className="text-primary font-label-md text-label-md hover:underline">
+            <Link
+              to={ROUTES.FORGOT_PASSWORD}
+              className="text-primary font-label-md text-label-md hover:underline"
+            >
               Forgot password?
             </Link>
-            <Link to={ROUTES.REGISTER} className="text-primary font-label-md text-label-md hover:underline">
+            <Link
+              to={ROUTES.REGISTER}
+              className="text-primary font-label-md text-label-md hover:underline"
+            >
               Create account
             </Link>
           </div>

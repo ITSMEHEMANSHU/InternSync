@@ -16,12 +16,12 @@ export const AuthProvider = ({ children }) => {
     return data;
   }, []);
 
-  const register = useCallback(async ({ email, password, name, role }) => {
+  const register = useCallback(async ({ email, password, name, role, metadata }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name, role },
+        data: { name, role, ...(metadata || {}) },
       },
     });
     if (error) throw new Error(error.message);
