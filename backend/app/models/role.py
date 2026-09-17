@@ -11,8 +11,7 @@ class Role(Base):
     __tablename__ = "roles"
 
     id: Mapped[PyUUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
+        UUID(as_uuid=True), primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
     code: Mapped[str] = mapped_column(String, nullable=False)
@@ -20,6 +19,5 @@ class Role(Base):
     description: Mapped[str | None] = mapped_column(String)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=text("now()"),
+        DateTime(timezone=True), server_default=text("now()"),
     )

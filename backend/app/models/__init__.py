@@ -3,6 +3,7 @@ from app.models.enums import (
     AssignmentStatus, AttendanceStatus, TaskStatus, ReportStatus,
     DocumentType, DocumentStatus, RiskLevel, NotificationType,
 )
+from app.models.institute import Institute
 from app.models.role import Role
 from app.models.user import User
 from app.models.company import Company
@@ -13,5 +14,5 @@ __all__ = [
     "UserRole", "UserStatus", "InternshipStatus", "ApplicationStatus",
     "AssignmentStatus", "AttendanceStatus", "TaskStatus", "ReportStatus",
     "DocumentType", "DocumentStatus", "RiskLevel", "NotificationType",
-    "Role", "User", "Company", "Internship", "Application",
+    "Institute", "Role", "User", "Company", "Internship", "Application",
 ]
