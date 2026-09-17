@@ -1,15 +1,30 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+import { supabase } from './supabase.js';
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 const request = async (endpoint, options = {}) => {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(session?.access_token && {
+      Authorization: `Bearer ${session.access_token}`,
+    }),
+    ...options.headers,
+  };
+
   const res = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers,
   });
-  if (!res.ok) throw new Error(`API Error: ${res.status}`);
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `API Error: ${res.status}`);
+  }
+
   return res.json();
 };
-
-// TODO: swap each method with real endpoint when backend is ready
 
 export const weeklyReportsService = {
   getAll:     (studentId)             => request(`/students/${studentId}/weekly-reports`),
@@ -30,17 +45,21 @@ export const studentService = {
 };
 
 export const internshipService = {
-  getAll:    (params) => request(`/internships?${new URLSearchParams(params)}`),
-  getById:   (id)     => request(`/internships/${id}`),
-  apply:     (id, data) => request(`/internships/${id}/apply`, { method: 'POST', body: JSON.stringify(data) }),
-  bookmark:  (id)     => request(`/internships/${id}/bookmark`, { method: 'POST' }),
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/internships${qs ? `?${qs}` : ''}`);
+  },
+  getById: (id) => request(`/internships/${id}`),
+  apply: (id, data) =>
+    request(`/internships/${id}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
 export const applicationService = {
-  getAll:    (studentId) => request(`/students/${studentId}/applications`),
-  getById:   (id)        => request(`/applications/${id}`),
-  withdraw:  (id)        => request(`/applications/${id}/withdraw`, { method: 'POST' }),
-  uploadDoc: (id, data)  => request(`/applications/${id}/documents`, { method: 'POST', body: JSON.stringify(data) }),
+  getMyApplications: () => request(`/applications/my`),
+  getById: (id) => request(`/applications/${id}`),
 };
 
 export const attendanceService = {
@@ -55,15 +74,16 @@ export const taskService = {
 };
 
 export const facultyService = {
-  getStudents:    (facultyId) => request(`/faculty/${facultyId}/students`),
-  getStudent:     (id)        => request(`/students/${id}`),
-  getApprovals:   (facultyId) => request(`/faculty/${facultyId}/approvals`),
-  approve:        (id, data)  => request(`/approvals/${id}/approve`, { method: 'POST', body: JSON.stringify(data) }),
-  reject:         (id, data)  => request(`/approvals/${id}/reject`, { method: 'POST', body: JSON.stringify(data) }),
-  getRiskCases:   (facultyId) => request(`/faculty/${facultyId}/risk-cases`),
-  addIntervention:(id, data)  => request(`/risk-cases/${id}/interventions`, { method: 'POST', body: JSON.stringify(data) }),
-  getAnalytics:   (facultyId) => request(`/faculty/${facultyId}/analytics`),
-  assignMentor:   (studentId, mentorId) => request(`/students/${studentId}/mentor`, { method: 'PUT', body: JSON.stringify({ mentorId }) }),
+  getApprovals: () => request(`/faculty/applications`),
+  getAllApplications: () => request(`/faculty/applications/all`),
+  getApprovalDetail: (id) => request(`/faculty/applications/${id}`),
+  approve: (id) =>
+    request(`/faculty/applications/${id}/approve`, { method: 'POST' }),
+  reject: (id, reason) =>
+    request(`/faculty/applications/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 };
 
 export const companyService = {

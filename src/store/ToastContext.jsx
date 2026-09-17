@@ -16,6 +16,7 @@ export const ToastProvider = ({ children }) => {
     error:   (msg) => addToast(msg, 'error'),
     info:    (msg) => addToast(msg, 'info'),
   };
+  toast.toast = toast;
 
   const ICONS = { success: 'check_circle', error: 'error', info: 'info' };
   const STYLES = {

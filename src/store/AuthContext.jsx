@@ -1,38 +1,61 @@
-import { createContext, useContext, useState } from 'react';
-import { ROLES } from '../constants/roles.js';
+import { createContext, useContext, useCallback } from 'react';
+import { supabase } from '../services/supabase.js';
+import { useSession } from '../hooks/useSession.js';
 
 const AuthContext = createContext(null);
 
-const DEMO_USERS = {
-  [ROLES.STUDENT]: { id: 'STU-001', name: 'Aarav Sharma', email: 'aarav@apex.edu', avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDJWs50yqA9fmxoiAas_G2fPF2JRt1URCexrc0mSoHGv2NCN31e-e9NqjnoOn6JB_KFLPx37XWsCtlqVrpJYE5yAANX0Wfzntmjv9ZRO42TdxPK7J51d2SqL5jhY26xziaEhZXGVL7oSQteLYo9h_hebARO305fImAobdStsyJ6WvQ0dXutU52qR2Thp2v5Xh1MRbNhDYkVlQs4vOskHAg7PwcVBlnv3NI5UYXr-ikjQYelxxdktDTl', academicYear: 'AY 2024-25', notificationCount: 3 },
-  [ROLES.FACULTY]: { id: 'FAC-001', name: 'Dr. Meenakshi Sundaram', email: 'meenakshi@apex.edu', avatar: null, academicYear: 'AY 2024-25', notificationCount: 7 },
-  [ROLES.COMPANY]: { id: 'CMP-001', name: 'Rajesh Iyer', email: 'rajesh@zoho.com', avatar: null, academicYear: 'AY 2024-25', notificationCount: 2 },
-  [ROLES.ADMIN]:   { id: 'ADM-001', name: 'Suresh Kumar', email: 'suresh@apex.edu', avatar: null, academicYear: 'AY 2024-25', notificationCount: 5 },
-};
-
 export const AuthProvider = ({ children }) => {
-  const [role, setRole] = useState(() => localStorage.getItem('is_role') || null);
-  const [user, setUser] = useState(() => {
-    const r = localStorage.getItem('is_role');
-    return r ? DEMO_USERS[r] : null;
-  });
+  const { session, user, role, loading } = useSession();
 
-  const login = (selectedRole) => {
-    localStorage.setItem('is_role', selectedRole);
-    setRole(selectedRole);
-    setUser(DEMO_USERS[selectedRole]);
-  };
+  const login = useCallback(async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  }, []);
 
-  const logout = () => {
-    localStorage.removeItem('is_role');
-    setRole(null);
-    setUser(null);
-  };
+  const register = useCallback(async ({ email, password, name, role }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name, role },
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      throw new Error('User already registered with this email address.');
+    }
+    return data;
+  }, []);
 
-  const switchRole = (newRole) => login(newRole);
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
+
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    if (error) throw new Error(error.message);
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role, login, logout, switchRole, isAuthenticated: !!role }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        role,
+        loading,
+        isAuthenticated: !!session,
+        login,
+        register,
+        logout,
+        resetPassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

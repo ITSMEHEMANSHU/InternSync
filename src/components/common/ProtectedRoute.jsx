@@ -1,11 +1,20 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext.jsx';
-import { roleDashboard } from '../../constants/routes.js';
+import { roleDashboard } from '../../utils/roleGuard.js';
 import AppLayout from '../../layouts/AppLayout.jsx';
+import Skeleton from './Skeleton.jsx';
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { role, isAuthenticated } = useAuth();
+  const { role, isAuthenticated, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Skeleton variant="card" count={2} />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;

@@ -3,20 +3,23 @@ import { useInternships } from '../../hooks/useInternships.js';
 import { useToast } from '../../store/ToastContext.jsx';
 import { ROUTES } from '../../constants/routes.js';
 import SearchBar from '../../components/common/SearchBar.jsx';
-import AIMatchBadge from '../../components/common/AIMatchBadge.jsx';
 import Skeleton from '../../components/common/Skeleton.jsx';
 import EmptyState from '../../components/common/EmptyState.jsx';
 
 const InternshipsPage = () => {
-  const { internships, loading, filter, setFilter, apply } = useInternships();
-  const toast = useToast();
+  const { internships, loading, error, filter, setFilter, apply } = useInternships();
+  const { toast } = useToast();
   const navigate = useNavigate();
-  const [applying, setApplying] = [null, () => {}];
 
   const handleApply = async (e, id) => {
     e.stopPropagation();
-    await apply(id);
-    toast.success('Application submitted successfully!');
+    try {
+      await apply(id);
+      toast.success('Application submitted successfully!');
+      navigate(ROUTES.STUDENT.APPLICATIONS);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to apply');
+    }
   };
 
   return (
@@ -24,16 +27,17 @@ const InternshipsPage = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-headline-xl text-headline-xl font-bold text-on-surface">Discover Internships</h1>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-1">AI-matched opportunities based on your profile</p>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+            AI-matched opportunities based on your profile
+          </p>
         </div>
-        <span className="px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-sm text-label-sm font-bold uppercase">AI Match</span>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
         <SearchBar
           value={filter.search}
           onChange={(v) => setFilter((f) => ({ ...f, search: v }))}
-          placeholder="Search by title or company..."
+          placeholder="Search by title..."
           className="flex-1"
         />
         <select
@@ -47,42 +51,95 @@ const InternshipsPage = () => {
         </select>
       </div>
 
-      {loading ? <Skeleton variant="row" count={4} /> : internships.length === 0 ? (
-        <EmptyState icon="search_off" title="No internships found" description="Try adjusting your filters." action={{ label: 'Clear Filters', icon: 'filter_alt_off', onClick: () => setFilter({ search: '', location: '', remote: '' }) }} />
-      ) : (
+      {loading && <Skeleton variant="row" count={4} />}
+
+      {!loading && error && (
+        <EmptyState
+          icon="error"
+          title="Could not load internships"
+          description={error}
+          action={{ label: 'Retry', icon: 'refresh', onClick: () => setFilter((f) => ({ ...f })) }}
+        />
+      )}
+
+      {!loading && !error && internships.length === 0 && (
+        <EmptyState
+          icon="search_off"
+          title="No internships found"
+          description="Try adjusting your filters or check back later."
+          action={{
+            label: 'Clear Filters',
+            icon: 'filter_alt_off',
+            onClick: () => setFilter({ search: '', location: '', remote: '' }),
+          }}
+        />
+      )}
+
+      {!loading && !error && internships.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
           {internships.map((i) => (
             <div
               key={i.id}
-              onClick={() => navigate(ROUTES.STUDENT.INTERNSHIPS)}
+              onClick={() => navigate(ROUTES.STUDENT.INTERNSHIP_DETAIL.replace(':id', i.id))}
               className="bg-surface-container-lowest rounded-xl shadow-sm p-space-md flex flex-col gap-3 hover:shadow-md transition-all cursor-pointer"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-primary-fixed flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[20px] text-primary">business</span>
+                    <span className="material-symbols-outlined text-[20px] text-primary">
+                      business
+                    </span>
                   </div>
                   <div>
-                    <p className="font-headline-sm text-headline-sm font-bold text-on-surface">{i.title}</p>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">{i.company}</p>
+                    <p className="font-headline-sm text-headline-sm font-bold text-on-surface">
+                      {i.title}
+                    </p>
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">
+                      {i.company?.name}
+                    </p>
                   </div>
                 </div>
-                <AIMatchBadge percent={i.aiMatch} />
               </div>
 
-              <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">{i.description}</p>
+              {i.description && (
+                <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2">
+                  {i.description}
+                </p>
+              )}
 
-              <div className="flex flex-wrap gap-1">
-                {i.skills.map((s) => (
-                  <span key={s} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-container text-on-surface">{s}</span>
-                ))}
-              </div>
+              {Array.isArray(i.required_skills) && i.required_skills.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {i.required_skills.map((s) => (
+                    <span
+                      key={s}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-surface-container text-on-surface"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-1 border-t border-outline-variant/20">
                 <div className="flex items-center gap-3 text-[12px] text-on-surface-variant">
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">location_on</span>{i.location}</span>
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">schedule</span>{i.duration}</span>
-                  <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">currency_rupee</span>{i.stipend?.toLocaleString('en-IN')}/mo</span>
+                  {i.location && (
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">location_on</span>
+                      {i.location}
+                    </span>
+                  )}
+                  {i.duration_months && (
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      {i.duration_months} months
+                    </span>
+                  )}
+                  {typeof i.stipend === 'number' && (
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">currency_rupee</span>
+                      {i.stipend.toLocaleString('en-IN')}/mo
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={(e) => handleApply(e, i.id)}
