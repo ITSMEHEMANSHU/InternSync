@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext.jsx';
 import { ROUTES } from '../../constants/routes.js';
@@ -10,12 +10,18 @@ const API_BASE =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { login, isAuthenticated, role: currentRole, loading: authLoading } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && currentRole) {
+      navigate(roleDashboard(currentRole), { replace: true });
+    }
+  }, [authLoading, isAuthenticated, currentRole, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,23 +29,40 @@ const LoginPage = () => {
     try {
       await login(email, password);
 
-      // Wait for supabase session to be available
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+      // Wait for Supabase session to be available
+      let session = null;
+      for (let i = 0; i < 10; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          session = data.session;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 200));
+      }
       if (!session) throw new Error('Session not created');
 
-      // Ask backend for authoritative role
-      const res = await fetch(`${API_BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      // Fetch authoritative role from backend
+      let role = session.user?.user_metadata?.role || 'student';
+      for (let i = 0; i < 5; i++) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/me`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const me = await res.json();
+            if (me?.role) {
+              role = me.role;
+              break;
+            }
+          }
+        } catch {
+          /* retry */
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
 
-      if (!res.ok) throw new Error('Failed to fetch user profile');
-
-      const me = await res.json();
       toast.success('Welcome back!');
-      navigate(roleDashboard(me.role), { replace: true });
+      navigate(roleDashboard(role), { replace: true });
     } catch (err) {
       toast.error(err?.message || 'Login failed');
     } finally {

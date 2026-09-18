@@ -8,6 +8,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { role, isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
+  // Wait for /auth/me — never redirect while loading
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">

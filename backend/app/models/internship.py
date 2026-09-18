@@ -8,15 +8,14 @@ from datetime import datetime, date
 from uuid import UUID as PyUUID
 
 from app.db.base import Base
-from app.models.enums import InternshipStatus
 
 
 class Internship(Base):
     __tablename__ = "internships"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[PyUUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
+        UUID(as_uuid=True), primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
     company_id: Mapped[PyUUID] = mapped_column(
@@ -30,15 +29,16 @@ class Internship(Base):
     location: Mapped[str | None] = mapped_column(String)
     remote: Mapped[bool] = mapped_column(Boolean, default=False)
     openings: Mapped[int] = mapped_column(Integer, default=1)
-    status: Mapped[str] = mapped_column(InternshipStatus, default="draft")
+    status: Mapped[str] = mapped_column(String, default="draft")
     deadline: Mapped[date | None] = mapped_column(Date)
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
+    approved_by: Mapped[PyUUID | None] = mapped_column(UUID(as_uuid=True))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=text("now()"),
+        DateTime(timezone=True), server_default=text("now()"),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=text("now()"),
+        DateTime(timezone=True), server_default=text("now()"),
     )

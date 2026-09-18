@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase.js';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export const useSession = () => {
   const [session, setSession] = useState(null);
@@ -14,12 +15,14 @@ export const useSession = () => {
 
     const hydrate = async (s) => {
       if (!s) {
-        setUser(null);
-        setRole(null);
+        if (mounted) {
+          setUser(null);
+          setRole(null);
+          setLoading(false);
+        }
         return;
       }
 
-      // Start with JWT data
       const base = {
         id: s.user.id,
         email: s.user.email,
@@ -30,42 +33,42 @@ export const useSession = () => {
         notificationCount: s.user.user_metadata?.notification_count || 0,
       };
 
-      // Enrich from backend — this is authoritative
+      // Get authoritative role from DB — MUST complete before loading=false
+      let finalUser = base;
+      let finalRole = base.role;
       try {
         const res = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${s.access_token}` },
         });
         if (res.ok) {
           const enriched = await res.json();
-          if (!mounted) return;
-          const finalUser = {
+          finalUser = {
             ...base,
             ...enriched,
             avatar: enriched.avatar || base.avatar,
           };
-          setUser(finalUser);
-          setRole(enriched.role);       // ← role from DB
-          return;
+          finalRole = enriched.role || base.role;
         }
       } catch {
-        /* fall through to JWT base */
+        /* fall back to JWT role */
       }
 
-      if (mounted) {
-        setUser(base);
-        setRole(base.role);
-      }
+      if (!mounted) return;
+      setUser(finalUser);
+      setRole(finalRole);
+      setLoading(false);
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       setSession(session);
-      hydrate(session).finally(() => mounted && setLoading(false));
+      hydrate(session);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       if (!mounted) return;
       setSession(s);
+      setLoading(true);
       hydrate(s);
     });
 

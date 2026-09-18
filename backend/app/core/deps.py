@@ -26,7 +26,10 @@ async def get_current_user(
     result = await db.execute(select(User).where(User.id == user_id))
     db_user = result.scalar_one_or_none()
 
-    role_code = "student"
+    user_meta = payload.get("user_metadata", {}) or {}
+    meta_role = user_meta.get("role")
+
+    role_code = None
     if db_user and db_user.role_id:
         role_result = await db.execute(
             select(Role).where(Role.id == db_user.role_id)
@@ -35,10 +38,13 @@ async def get_current_user(
         if role_obj:
             role_code = role_obj.code
 
+    if not role_code:
+        role_code = meta_role or "student"
+
     return {
         "id": user_id,
         "email": payload.get("email"),
-        "name": db_user.name if db_user else None,
+        "name": (db_user.name if db_user and db_user.name else None) or user_meta.get("name"),
         "role": role_code,
         "institute_id": str(db_user.institute_id) if db_user and db_user.institute_id else None,
         "status": db_user.status if db_user else "active",

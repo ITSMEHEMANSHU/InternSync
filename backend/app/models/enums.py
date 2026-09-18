@@ -18,7 +18,7 @@ UserStatus = PGEnum(
 )
 
 InternshipStatus = PGEnum(
-    "draft", "open", "closed", "archived",
+    "draft", "pending_approval", "open", "rejected", "closed", "archived",
     name="internship_status",
     create_type=False,
 )
