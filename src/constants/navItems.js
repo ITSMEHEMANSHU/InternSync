@@ -1,0 +1,46 @@
+import { ROUTES } from './routes.js';
+
+export const NAV_CONFIG = {
+  student: [
+    { path: ROUTES.STUDENT.DASHBOARD,      icon: 'dashboard',      label: 'Overview' },
+    { path: ROUTES.STUDENT.PROFILE,        icon: 'badge',          label: 'Profile & Skills', badge: { text: 'OCR', cls: 'bg-secondary-fixed text-on-secondary-fixed' } },
+    { path: ROUTES.STUDENT.INTERNSHIPS,    icon: 'auto_awesome',   label: 'Discover Roles',   badge: { text: 'AI Match', cls: 'bg-primary-fixed text-on-primary-fixed' } },
+    { path: ROUTES.STUDENT.APPLICATIONS,   icon: 'send',           label: 'Applications',     count: '5' },
+    { path: ROUTES.STUDENT.MY_INTERNSHIP,  icon: 'event_available',label: 'My Internship',    dot: true },
+    { path: ROUTES.STUDENT.WEEKLY_REPORTS, icon: 'description',    label: 'Work Reports' },
+    { path: ROUTES.STUDENT.CERTIFICATE,    icon: 'verified',       label: 'Credits & Certificate' },
+  ],
+  faculty: [
+    { path: ROUTES.FACULTY.DASHBOARD,         icon: 'dashboard',        label: 'Overview' },
+    { path: ROUTES.FACULTY.STUDENTS,          icon: 'groups',           label: 'Students',          count: '48' },
+    { path: ROUTES.FACULTY.APPROVALS,         icon: 'approval',         label: 'Approvals',         badge: { text: '7', cls: 'bg-error-container text-on-error-container' } },
+    { path: ROUTES.FACULTY.DOCUMENTS,         icon: 'folder_open',      label: 'Documents',         badge: { text: 'OCR', cls: 'bg-secondary-fixed text-on-secondary-fixed' } },
+    { path: ROUTES.FACULTY.MENTOR_ASSIGNMENT, icon: 'supervisor_account',label: 'Mentor Assignment' },
+    { path: ROUTES.FACULTY.MONITORING,        icon: 'monitor_heart',    label: 'Monitoring',        dot: true },
+    { path: ROUTES.FACULTY.REPORTS,           icon: 'description',      label: 'Reports' },
+    { path: ROUTES.FACULTY.RISK_CENTER,       icon: 'warning',          label: 'Risk Center',       badge: { text: '3', cls: 'bg-error-container text-on-error-container' } },
+    { path: ROUTES.FACULTY.ANALYTICS,         icon: 'analytics',        label: 'Analytics' },
+  ],
+  company: [
+    { path: ROUTES.COMPANY.DASHBOARD,           icon: 'dashboard',     label: 'Overview' },
+    { path: ROUTES.COMPANY.PROFILE,             icon: 'business',      label: 'Company Profile' },
+    { path: ROUTES.COMPANY.POST_INTERNSHIP,     icon: 'add_circle',    label: 'Post Internship' },
+    { path: ROUTES.COMPANY.INTERNSHIPS,         icon: 'work',          label: 'Manage Internships' },
+    { path: ROUTES.COMPANY.APPLICANTS,          icon: 'people',        label: 'Applicants',        count: '12' },
+    { path: ROUTES.COMPANY.JOINING_VERIFICATION,icon: 'how_to_reg',    label: 'Joining Verification' },
+    { path: ROUTES.COMPANY.INTERNS,             icon: 'badge',         label: 'Active Interns',    dot: true },
+    { path: ROUTES.COMPANY.TASKS,               icon: 'task_alt',      label: 'Task Assignment' },
+    { path: ROUTES.COMPANY.WEEKLY_REVIEW,       icon: 'rate_review',   label: 'Weekly Review' },
+    { path: ROUTES.COMPANY.EVALUATION,          icon: 'star_rate',     label: 'Evaluation' },
+  ],
+  admin: [
+    { path: ROUTES.ADMIN.DASHBOARD,            icon: 'dashboard',      label: 'Overview' },
+    { path: ROUTES.ADMIN.USERS,                icon: 'manage_accounts',label: 'Users' },
+    { path: ROUTES.ADMIN.DEPARTMENTS,          icon: 'account_tree',   label: 'Departments' },
+    { path: ROUTES.ADMIN.COMPANY_VERIFICATION, icon: 'verified_user',  label: 'Company Verification', badge: { text: '4', cls: 'bg-error-container text-on-error-container' } },
+    { path: ROUTES.ADMIN.POLICIES,             icon: 'policy',         label: 'Policies' },
+    { path: ROUTES.ADMIN.ACCESS_CONTROL,       icon: 'lock',           label: 'Access Control' },
+    { path: ROUTES.ADMIN.AUDIT_LOGS,           icon: 'history',        label: 'Audit Logs' },
+    { path: ROUTES.ADMIN.SYSTEM_MONITORING,    icon: 'monitor',        label: 'System Monitoring',  dot: true },
+  ],
+};
