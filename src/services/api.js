@@ -74,13 +74,11 @@ export const taskService = {
 };
 
 export const facultyService = {
-  getApprovals: () => request(`/faculty/applications`),
-  getAllApplications: () => request(`/faculty/applications/all`),
-  getApprovalDetail: (id) => request(`/faculty/applications/${id}`),
-  approve: (id) =>
-    request(`/faculty/applications/${id}/approve`, { method: 'POST' }),
-  reject: (id, reason) =>
-    request(`/faculty/applications/${id}/reject`, {
+  getInternshipApprovals: () => request('/faculty/internship-approvals'),
+  approveInternship: (id) =>
+    request(`/faculty/internship-approvals/${id}/approve`, { method: 'POST' }),
+  rejectInternship: (id, reason) =>
+    request(`/faculty/internship-approvals/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),

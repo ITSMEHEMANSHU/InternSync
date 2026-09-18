@@ -1,11 +1,22 @@
-import { createContext, useContext, useCallback } from 'react';
+import { createContext, useContext, useCallback, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase.js';
 import { useSession } from '../hooks/useSession.js';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const { session, user, role, loading } = useSession();
+  const { session, user, role: sessionRole, loading } = useSession();
+  const [activeRole, setActiveRole] = useState(null);
+
+  useEffect(() => {
+    if (sessionRole) {
+      setActiveRole(sessionRole);
+    }
+  }, [sessionRole]);
+
+  const switchRole = useCallback((newRole) => {
+    setActiveRole(newRole);
+  }, []);
 
   const login = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -42,18 +53,21 @@ export const AuthProvider = ({ children }) => {
     if (error) throw new Error(error.message);
   }, []);
 
+  const effectiveRole = activeRole || sessionRole;
+
   return (
     <AuthContext.Provider
       value={{
         session,
         user,
-        role,
+        role: effectiveRole,
         loading,
         isAuthenticated: !!session,
         login,
         register,
         logout,
         resetPassword,
+        switchRole,
       }}
     >
       {children}

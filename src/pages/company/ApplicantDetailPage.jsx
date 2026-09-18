@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
@@ -7,23 +7,83 @@ import AIInsightCard from '../../components/common/AIInsightCard.jsx';
 import { APPLICANTS_LIST } from '../../data/mockData.js';
 import { ROUTES } from '../../constants/routes.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import { companyService } from '../../services/companyService.js';
 
 const CompanyApplicantDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [applicant, setApplicant] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const applicant = APPLICANTS_LIST.find((a) => a.id === id) || APPLICANTS_LIST[0];
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDetail = async () => {
+      try {
+        const data = await companyService.getApplicantById(id);
+        if (isMounted && data) {
+          setApplicant({
+            id: data.id,
+            name: data.student?.name || 'Applicant',
+            college: 'Partner Institute',
+            branch: data.student?.email ? data.student.email.split('@')[1] || 'Engineering' : 'CS',
+            cgpa: '8.5',
+            appliedFor: data.internship?.title || 'Internship Position',
+            appliedAt: data.applied_at ? new Date(data.applied_at).toLocaleDateString() : 'Recently',
+            aiMatch: Math.round(data.ai_match_score || 85),
+            status: data.status,
+            coverLetter: data.cover_letter,
+            aiMatchReason: data.ai_match_reason,
+          });
+          return;
+        }
+      } catch (err) {
+        // Fallback to mock data if UUID not found in live DB
+        console.warn('Backend detail fallback:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
 
-  const handleStatusChange = (newStatus, msg) => {
+      if (isMounted) {
+        const fallback = APPLICANTS_LIST.find((a) => a.id === id) || APPLICANTS_LIST[0];
+        setApplicant(fallback);
+      }
+    };
+
+    fetchDetail();
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  const handleStatusChange = async (newStatus, msg) => {
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      if (id && id.includes('-') && id.length > 20) {
+        await companyService.updateApplicantStatus(id, { status: newStatus });
+      }
       toast.success(msg);
-      navigate(ROUTES.COMPANY.APPLICANTS);
-    }, 600);
+      setTimeout(() => {
+        navigate(ROUTES.COMPANY.APPLICANTS);
+      }, 500);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update applicant status');
+    } finally {
+      setIsProcessing(false);
+    }
   };
+
+  if (loading || !applicant) {
+    return (
+      <div className="flex flex-col w-full space-y-6">
+        <PageHeader title="Candidate Profile Review" breadcrumb="Applicants / Detail" />
+        <div className="p-12 text-center text-on-surface-variant font-body-md bg-surface-container-lowest rounded-xl">
+          Loading candidate details...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col w-full space-y-6">
@@ -66,11 +126,20 @@ const CompanyApplicantDetailPage = () => {
                 </a>
               </div>
             </div>
+
+            {applicant.coverLetter && (
+              <div className="pt-4 border-t border-surface-container-high">
+                <span className="font-label-md font-semibold text-on-surface block mb-1">Cover Letter:</span>
+                <p className="font-body-sm text-on-surface-variant bg-surface-container p-3 rounded-lg">
+                  {applicant.coverLetter}
+                </p>
+              </div>
+            )}
           </div>
 
           <AIInsightCard
             title="AI Skill Alignment & Match Analysis"
-            insight={`Candidate scored ${applicant.aiMatch}% alignment with ${applicant.appliedFor} position. Top matching skills: Go, Redis, and Microservices. Minor skill gap identified in Kubernetes production deployment experience.`}
+            insight={applicant.aiMatchReason || `Candidate scored ${applicant.aiMatch}% alignment with ${applicant.appliedFor} position. Top matching skills: Go, Redis, and Microservices. Minor skill gap identified in Kubernetes production deployment experience.`}
             confidence={95}
           />
 
@@ -106,21 +175,21 @@ const CompanyApplicantDetailPage = () => {
               <button
                 onClick={() => handleStatusChange('approved', `Candidate ${applicant.name} approved for internship!`)}
                 disabled={isProcessing}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-label-md text-label-md font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-label-md text-label-md font-bold rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm">check_circle</span> Approve & Extend Offer
               </button>
               <button
                 onClick={() => handleStatusChange('shortlisted', `Candidate ${applicant.name} moved to Shortlisted.`)}
                 disabled={isProcessing}
-                className="w-full py-3 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm">star</span> Shortlist Candidate
               </button>
               <button
                 onClick={() => handleStatusChange('rejected', `Candidate ${applicant.name} application rejected.`)}
                 disabled={isProcessing}
-                className="w-full py-3 bg-error-container text-on-error-container font-label-md text-label-md font-bold rounded-lg hover:bg-error-container/80 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-error-container text-on-error-container font-label-md text-label-md font-bold rounded-lg hover:bg-error-container/80 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-sm">cancel</span> Reject Application
               </button>

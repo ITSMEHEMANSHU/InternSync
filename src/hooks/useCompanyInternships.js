@@ -1,25 +1,73 @@
 import { useState, useEffect, useCallback } from 'react';
-import { COMPANY_KPIS, COMPANY_INTERNSHIPS } from '../data/mockData.js';
+import { companyService } from '../services/companyService.js';
 
 export const useCompanyInternships = () => {
   const [internships, setInternships] = useState([]);
-  const [kpis, setKpis] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState(null);
+  const [acting, setActing] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await companyService.getOwnInternships();
+      setInternships(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err?.message || 'Failed to load');
+      setInternships([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // TODO: companyService.getInternships(companyId)
-    const t = setTimeout(() => { setInternships(COMPANY_INTERNSHIPS); setKpis(COMPANY_KPIS); setLoading(false); }, 450);
-    return () => clearTimeout(t);
+    load();
+  }, [load]);
+
+  const create = useCallback(async (data) => {
+    return companyService.createInternship(data);
   }, []);
 
-  const postInternship = useCallback(async (data) => {
-    setPosting(true);
-    // TODO: companyService.postInternship(companyId, data)
-    await new Promise((r) => setTimeout(r, 800));
-    setPosting(false);
-    return true;
+  const submit = useCallback(async (id) => {
+    setActing(id);
+    try {
+      const updated = await companyService.submitForApproval(id);
+      setInternships((prev) => prev.map((i) => (i.id === id ? updated : i)));
+    } finally {
+      setActing(null);
+    }
   }, []);
 
-  return { internships, kpis, loading, posting, postInternship };
+  const remove = useCallback(async (id) => {
+    setActing(id);
+    try {
+      await companyService.deleteInternship(id);
+      setInternships((prev) => prev.filter((i) => i.id !== id));
+    } finally {
+      setActing(null);
+    }
+  }, []);
+
+  const close = useCallback(async (id) => {
+    setActing(id);
+    try {
+      const updated = await companyService.closeInternship(id);
+      setInternships((prev) => prev.map((i) => (i.id === id ? updated : i)));
+    } finally {
+      setActing(null);
+    }
+  }, []);
+
+  return {
+    internships,
+    loading,
+    error,
+    acting,
+    create,
+    submit,
+    remove,
+    close,
+    reload: load,
+  };
 };

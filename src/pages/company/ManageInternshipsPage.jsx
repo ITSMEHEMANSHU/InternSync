@@ -1,121 +1,203 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
+import { useCompanyInternships } from '../../hooks/useCompanyInternships.js';
+import { useToast } from '../../store/ToastContext.jsx';
+import { ROUTES } from '../../constants/routes.js';
 import DataTable from '../../components/common/DataTable.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-import FilterBar from '../../components/common/FilterBar.jsx';
-import SearchBar from '../../components/common/SearchBar.jsx';
-import { COMPANY_INTERNSHIPS } from '../../data/mockData.js';
-import { ROUTES } from '../../constants/routes.js';
-import { useToast } from '../../store/ToastContext.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
 
-const CompanyManageInternshipsPage = () => {
-  const navigate = useNavigate();
+const ManageInternshipsPage = () => {
+  const { internships, loading, error, acting, submit, remove, close } =
+    useCompanyInternships();
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const navigate = useNavigate();
 
-  const filtered = COMPANY_INTERNSHIPS.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const handleSubmit = async (id) => {
+    try {
+      await submit(id);
+      toast.success('Submitted for faculty approval');
+    } catch (err) {
+      toast.error(err?.message || 'Submit failed');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this internship? This cannot be undone.')) return;
+    try {
+      await remove(id);
+      toast.success('Deleted');
+    } catch (err) {
+      toast.error(err?.message || 'Delete failed');
+    }
+  };
+
+  const handleClose = async (id) => {
+    if (!confirm('Close this internship? Students will no longer see it.'))
+      return;
+    try {
+      await close(id);
+      toast.success('Closed');
+    } catch (err) {
+      toast.error(err?.message || 'Close failed');
+    }
+  };
 
   const columns = [
     {
-      header: 'Internship Title',
-      accessor: 'title',
-      render: (row) => (
+      key: 'title',
+      label: 'Title',
+      render: (r) => (
         <div>
-          <span className="font-semibold text-on-surface">{row.title}</span>
-          <p className="text-xs text-on-surface-variant">Posted on {row.posted}</p>
+          <p className="font-semibold text-on-surface">{r.title}</p>
+          {r.location && (
+            <p className="text-xs text-on-surface-variant">{r.location}</p>
+          )}
         </div>
       ),
     },
     {
-      header: 'Applicants',
-      accessor: 'applications',
-      render: (row) => <span className="font-bold text-primary">{row.applications}</span>,
+      key: 'status',
+      label: 'Status',
+      render: (r) => <StatusBadge status={r.status} />,
     },
     {
-      header: 'Active Interns',
-      accessor: 'active',
-      render: (row) => <span className="font-semibold text-emerald-600">{row.active}</span>,
+      key: 'stipend',
+      label: 'Stipend',
+      render: (r) =>
+        r.stipend ? `₹${r.stipend.toLocaleString('en-IN')}/mo` : '—',
     },
     {
-      header: 'Status',
-      accessor: 'status',
-      render: (row) => <StatusBadge status={row.status} />,
+      key: 'deadline',
+      label: 'Deadline',
+      render: (r) => r.deadline || '—',
     },
     {
-      header: 'Deadline',
-      accessor: 'deadline',
-    },
-    {
-      header: 'Actions',
-      accessor: 'id',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate(ROUTES.COMPANY.APPLICANTS)}
-            className="px-2.5 py-1 text-xs bg-surface-container-high rounded text-on-surface hover:bg-surface-container-highest font-medium"
-          >
-            View Applicants
-          </button>
-          <button
-            onClick={() => toast.info(`Status for ${row.title} updated`)}
-            className="px-2.5 py-1 text-xs bg-primary-fixed/30 text-primary rounded font-medium hover:bg-primary-fixed/50"
-          >
-            Edit
-          </button>
+      key: 'actions',
+      label: 'Actions',
+      render: (r) => (
+        <div className="flex gap-2 flex-wrap">
+          {(r.status === 'draft' || r.status === 'rejected') && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSubmit(r.id);
+                }}
+                disabled={acting === r.id}
+                className="px-3 py-1 rounded bg-primary text-on-primary text-xs font-semibold hover:opacity-90"
+              >
+                Submit
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(r.id);
+                }}
+                disabled={acting === r.id}
+                className="px-3 py-1 rounded bg-error text-on-error text-xs font-semibold hover:opacity-90"
+              >
+                Delete
+              </button>
+            </>
+          )}
+
+          {r.status === 'pending_approval' && (
+            <>
+              <span className="text-xs text-secondary font-semibold px-2 py-1">
+                Awaiting faculty
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(r.id);
+                }}
+                className="px-3 py-1 rounded bg-error text-on-error text-xs font-semibold hover:opacity-90"
+              >
+                Withdraw
+              </button>
+            </>
+          )}
+
+          {r.status === 'open' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClose(r.id);
+              }}
+              className="px-3 py-1 rounded bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high"
+            >
+              Close
+            </button>
+          )}
+
+          {r.status === 'rejected' && r.rejection_reason && (
+            <span
+              className="text-xs text-error"
+              title={r.rejection_reason}
+            >
+              {r.rejection_reason.slice(0, 30)}
+              {r.rejection_reason.length > 30 ? '…' : ''}
+            </span>
+          )}
+
+          {r.status === 'closed' && (
+            <span className="text-xs text-on-surface-variant font-semibold">
+              Closed
+            </span>
+          )}
+
+          {r.status === 'archived' && (
+            <span className="text-xs text-on-surface-variant font-semibold">
+              Archived
+            </span>
+          )}
         </div>
       ),
     },
   ];
 
   return (
-    <div className="flex flex-col w-full space-y-6">
-      <PageHeader
-        title="Manage Internships"
-        breadcrumb="Company / Internships"
-        actions={[
-          {
-            label: '+ Post Internship',
-            onClick: () => navigate(ROUTES.COMPANY.POST_INTERNSHIP),
-            variant: 'primary',
-          },
-        ]}
-      />
-
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <SearchBar placeholder="Search listings..." value={searchTerm} onChange={setSearchTerm} />
-          <FilterBar
-            filters={[
-              {
-                id: 'status',
-                label: 'Status',
-                options: [
-                  { label: 'All Statuses', value: 'all' },
-                  { label: 'Active', value: 'active' },
-                  { label: 'Draft', value: 'draft' },
-                  { label: 'Closed', value: 'closed' },
-                ],
-                value: statusFilter,
-                onChange: setStatusFilter,
-              },
-            ]}
-          />
+    <div className="flex flex-col w-full gap-space-lg">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-headline-xl font-bold text-on-surface">
+            Manage Internships
+          </h1>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Create, submit, and manage your internship postings
+          </p>
         </div>
+        <button
+          onClick={() => navigate(ROUTES.COMPANY.POST_INTERNSHIP)}
+          className="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md font-semibold hover:opacity-90"
+        >
+          + Post Internship
+        </button>
+      </div>
 
+      {!loading && !error && internships.length === 0 ? (
+        <EmptyState
+          icon="work"
+          title="No internships yet"
+          description="Post your first internship to get started."
+          action={{
+            label: 'Post Internship',
+            icon: 'add_circle',
+            onClick: () => navigate(ROUTES.COMPANY.POST_INTERNSHIP),
+          }}
+        />
+      ) : (
         <DataTable
           columns={columns}
-          data={filtered}
-          onRowClick={(row) => navigate(ROUTES.COMPANY.APPLICANTS)}
+          data={internships}
+          loading={loading}
+          emptyIcon="work"
+          emptyTitle={error ? 'Could not load' : 'No internships'}
+          emptyDescription={error || ''}
         />
-      </div>
+      )}
     </div>
   );
 };
 
-export default CompanyManageInternshipsPage;
+export default ManageInternshipsPage;

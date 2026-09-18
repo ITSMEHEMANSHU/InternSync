@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ROUTES } from './constants/routes.js';
 import { ROLES } from './constants/roles.js';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
+import { useAuth } from './store/AuthContext.jsx';
+import { roleDashboard } from './utils/roleGuard.js';
 
 // Shared Pages
 import LoginPage from './pages/shared/LoginPage.jsx';
@@ -68,6 +70,15 @@ const PlaceholderPage = ({ title }) => (
     {title} — Coming Soon
   </div>
 );
+
+const RootRedirect = () => {
+  const { isAuthenticated, role, loading } = useAuth();
+  if (loading) return null;
+  if (isAuthenticated && role) {
+    return <Navigate to={roleDashboard(role)} replace />;
+  }
+  return <Navigate to={ROUTES.LOGIN} replace />;
+};
 
 const App = () => {
   return (
@@ -311,7 +322,7 @@ const App = () => {
       <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
       
       {/* Default redirect */}
-      <Route path="/" element={<Navigate to={ROUTES.LOGIN} replace />} />
+      <Route path="/" element={<RootRedirect />} />
     </Routes>
   );
 };

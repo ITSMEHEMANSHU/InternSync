@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext.jsx';
 import { ROUTES } from '../../constants/routes.js';
@@ -7,35 +7,62 @@ import { ROLES } from '../../constants/roles.js';
 import { useToast } from '../../store/ToastContext.jsx';
 import { useInstitutes } from '../../hooks/useInstitutes.js';
 import SearchableSelect from '../../components/common/SearchableSelect.jsx';
+import { supabase } from '../../services/supabase.js';
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, isAuthenticated, role: currentRole, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const { institutes, loading: instLoading } = useInstitutes();
 
   const [step, setStep] = useState(1);
   const [selectedRole, setSelectedRole] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && currentRole) {
+      navigate(roleDashboard(currentRole), { replace: true });
+    }
+  }, [authLoading, isAuthenticated, currentRole, navigate]);
+
   const [form, setForm] = useState({
-    name: '', email: '', password: '', confirmPassword: '',
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
     institute_id: '',
-    roll_no: '', branch: '', semester: '', cgpa: '',
-    department: '', designation: '',
-    company_name: '', company_email: '', company_website: '',
-    company_industry: '', company_location: '',
-    hr_spoc_name: '', hr_spoc_email: '', hr_spoc_phone: '',
+    roll_no: '',
+    branch: '',
+    semester: '',
+    cgpa: '',
+    department: '',
+    designation: '',
+    company_name: '',
+    company_email: '',
+    company_website: '',
+    company_industry: '',
+    company_location: '',
+    hr_spoc_name: '',
+    hr_spoc_email: '',
+    hr_spoc_phone: '',
   });
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
-    if ((selectedRole === ROLES.STUDENT || selectedRole === ROLES.FACULTY) && !form.institute_id) {
+    if (
+      (selectedRole === ROLES.STUDENT || selectedRole === ROLES.FACULTY) &&
+      !form.institute_id
+    ) {
       toast.error('Please select your institute');
       return;
     }
@@ -70,7 +97,7 @@ const RegisterPage = () => {
         });
       }
 
-      const data = await register({
+      await register({
         email: form.email,
         password: form.password,
         name: form.name,
@@ -78,16 +105,48 @@ const RegisterPage = () => {
         metadata,
       });
 
-      if (selectedRole === ROLES.FACULTY || selectedRole === ROLES.COMPANY) {
-        toast.success('Account created! Awaiting admin approval. Please log in.');
-        navigate(ROUTES.LOGIN);
-      } else if (!data?.session) {
-        toast.success('Account created successfully! Please log in to your account.');
-        navigate(ROUTES.LOGIN);
-      } else {
-        toast.success('Account created successfully!');
-        navigate(roleDashboard(selectedRole));
+      // --- Wait for Supabase session ---
+      let session = null;
+      for (let i = 0; i < 15; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
+          session = data.session;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 200));
       }
+      if (!session) throw new Error('Session not created. Try signing in.');
+
+      // --- Poll /auth/me until role matches selectedRole ---
+      let finalRole = session.user?.user_metadata?.role || selectedRole;
+      for (let i = 0; i < 10; i++) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/me`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const me = await res.json();
+            if (me?.role) {
+              finalRole = me.role;
+              if (me.role === selectedRole) break;
+            }
+          }
+        } catch {
+          /* retry */
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
+      if (selectedRole === ROLES.FACULTY || selectedRole === ROLES.COMPANY) {
+        toast.success('Account created! Awaiting admin approval.');
+      } else {
+        toast.success('Account created!');
+      }
+
+      // Give context time to catch up, then redirect
+      setTimeout(() => {
+        navigate(roleDashboard(finalRole), { replace: true });
+      }, 600);
     } catch (err) {
       toast.error(err?.message || 'Registration failed');
     } finally {
@@ -96,9 +155,24 @@ const RegisterPage = () => {
   };
 
   const roleCards = [
-    { role: ROLES.STUDENT, icon: 'school', title: 'Student', description: 'Apply for internships' },
-    { role: ROLES.FACULTY, icon: 'supervisor_account', title: 'Faculty / TPO', description: 'Approve and monitor students' },
-    { role: ROLES.COMPANY, icon: 'business', title: 'Company', description: 'Post internships and mentor' },
+    {
+      role: ROLES.STUDENT,
+      icon: 'school',
+      title: 'Student',
+      description: 'Apply for internships',
+    },
+    {
+      role: ROLES.FACULTY,
+      icon: 'supervisor_account',
+      title: 'Faculty / TPO',
+      description: 'Approve and monitor students',
+    },
+    {
+      role: ROLES.COMPANY,
+      icon: 'business',
+      title: 'Company',
+      description: 'Post internships and mentor',
+    },
   ];
 
   return (
@@ -106,14 +180,18 @@ const RegisterPage = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary to-sky-600 flex-col justify-center items-center p-12">
         <div className="text-center text-white">
           <h1 className="font-headline-lg font-bold mb-4">InternSync</h1>
-          <p className="font-body-lg opacity-90">AI-Powered Internship Management</p>
+          <p className="font-body-lg opacity-90">
+            AI-Powered Internship Management
+          </p>
         </div>
       </div>
 
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-surface-container-lowest overflow-y-auto">
         <div className="w-full max-w-lg">
           <div className="text-center mb-8">
-            <h2 className="font-headline-md font-bold text-on-surface mb-2">Create Account</h2>
+            <h2 className="font-headline-md font-bold text-on-surface mb-2">
+              Create Account
+            </h2>
             <p className="font-body-md text-on-surface-variant">
               {step === 1 ? 'Choose your role' : `Registering as ${selectedRole}`}
             </p>
@@ -124,13 +202,22 @@ const RegisterPage = () => {
               {roleCards.map((card) => (
                 <button
                   key={card.role}
-                  onClick={() => { setSelectedRole(card.role); setStep(2); }}
+                  onClick={() => {
+                    setSelectedRole(card.role);
+                    setStep(2);
+                  }}
                   className="p-6 rounded-xl border-2 border-outline-variant hover:border-primary hover:bg-primary-container/5 transition-all text-left flex items-center gap-4"
                 >
-                  <span className="material-symbols-outlined text-4xl text-primary">{card.icon}</span>
+                  <span className="material-symbols-outlined text-4xl text-primary">
+                    {card.icon}
+                  </span>
                   <div>
-                    <h3 className="font-label-lg font-semibold text-on-surface mb-1">{card.title}</h3>
-                    <p className="font-body-sm text-on-surface-variant">{card.description}</p>
+                    <h3 className="font-label-lg font-semibold text-on-surface mb-1">
+                      {card.title}
+                    </h3>
+                    <p className="font-body-sm text-on-surface-variant">
+                      {card.description}
+                    </p>
                   </div>
                 </button>
               ))}
@@ -144,30 +231,63 @@ const RegisterPage = () => {
                 onClick={() => setStep(1)}
                 className="flex items-center gap-2 text-primary font-label-md hover:underline mb-2"
               >
-                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+                <span className="material-symbols-outlined text-[20px]">
+                  arrow_back
+                </span>
                 Change Role
               </button>
 
               <div>
-                <label className="block font-label-md font-semibold text-on-surface mb-2">Full Name</label>
-                <input value={form.name} onChange={(e) => set('name', e.target.value)} required
-                  className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                <label className="block font-label-md font-semibold text-on-surface mb-2">
+                  Full Name
+                </label>
+                <input
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                />
               </div>
+
               <div>
-                <label className="block font-label-md font-semibold text-on-surface mb-2">Email</label>
-                <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} required
-                  className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                <label className="block font-label-md font-semibold text-on-surface mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set('email', e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-label-md font-semibold text-on-surface mb-2">Password</label>
-                  <input type="password" value={form.password} onChange={(e) => set('password', e.target.value)} required minLength={6}
-                    className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                  <label className="block font-label-md font-semibold text-on-surface mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => set('password', e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                  />
                 </div>
                 <div>
-                  <label className="block font-label-md font-semibold text-on-surface mb-2">Confirm</label>
-                  <input type="password" value={form.confirmPassword} onChange={(e) => set('confirmPassword', e.target.value)} required minLength={6}
-                    className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                  <label className="block font-label-md font-semibold text-on-surface mb-2">
+                    Confirm
+                  </label>
+                  <input
+                    type="password"
+                    value={form.confirmPassword}
+                    onChange={(e) => set('confirmPassword', e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                  />
                 </div>
               </div>
 
@@ -184,7 +304,9 @@ const RegisterPage = () => {
                     }))}
                     value={form.institute_id}
                     onChange={(v) => set('institute_id', v)}
-                    placeholder={instLoading ? 'Loading institutes…' : 'Search your institute…'}
+                    placeholder={
+                      instLoading ? 'Loading institutes…' : 'Search your institute…'
+                    }
                     disabled={instLoading}
                     emptyMessage="No institutes found"
                   />
@@ -200,26 +322,58 @@ const RegisterPage = () => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Roll No</label>
-                      <input value={form.roll_no} onChange={(e) => set('roll_no', e.target.value)} required
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Roll No
+                      </label>
+                      <input
+                        value={form.roll_no}
+                        onChange={(e) => set('roll_no', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Branch</label>
-                      <input value={form.branch} onChange={(e) => set('branch', e.target.value)} required placeholder="CSE"
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Branch
+                      </label>
+                      <input
+                        value={form.branch}
+                        onChange={(e) => set('branch', e.target.value)}
+                        required
+                        placeholder="CSE"
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Semester</label>
-                      <input type="number" min="1" max="12" value={form.semester} onChange={(e) => set('semester', e.target.value)} required
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Semester
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="12"
+                        value={form.semester}
+                        onChange={(e) => set('semester', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">CGPA</label>
-                      <input type="number" step="0.01" min="0" max="10" value={form.cgpa} onChange={(e) => set('cgpa', e.target.value)} required
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        CGPA
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="10"
+                        value={form.cgpa}
+                        onChange={(e) => set('cgpa', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                   </div>
                 </>
@@ -228,14 +382,28 @@ const RegisterPage = () => {
               {selectedRole === ROLES.FACULTY && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block font-label-md font-semibold text-on-surface mb-2">Department</label>
-                    <input value={form.department} onChange={(e) => set('department', e.target.value)} required placeholder="CSE"
-                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                    <label className="block font-label-md font-semibold text-on-surface mb-2">
+                      Department
+                    </label>
+                    <input
+                      value={form.department}
+                      onChange={(e) => set('department', e.target.value)}
+                      required
+                      placeholder="CSE"
+                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                    />
                   </div>
                   <div>
-                    <label className="block font-label-md font-semibold text-on-surface mb-2">Designation</label>
-                    <input value={form.designation} onChange={(e) => set('designation', e.target.value)} required placeholder="HoD / TPO"
-                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                    <label className="block font-label-md font-semibold text-on-surface mb-2">
+                      Designation
+                    </label>
+                    <input
+                      value={form.designation}
+                      onChange={(e) => set('designation', e.target.value)}
+                      required
+                      placeholder="HoD / TPO"
+                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                    />
                   </div>
                 </div>
               )}
@@ -243,62 +411,117 @@ const RegisterPage = () => {
               {selectedRole === ROLES.COMPANY && (
                 <>
                   <div>
-                    <label className="block font-label-md font-semibold text-on-surface mb-2">Company Name</label>
-                    <input value={form.company_name} onChange={(e) => set('company_name', e.target.value)} required
-                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                    <label className="block font-label-md font-semibold text-on-surface mb-2">
+                      Company Name
+                    </label>
+                    <input
+                      value={form.company_name}
+                      onChange={(e) => set('company_name', e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Company Email</label>
-                      <input type="email" value={form.company_email} onChange={(e) => set('company_email', e.target.value)} required
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Company Email
+                      </label>
+                      <input
+                        type="email"
+                        value={form.company_email}
+                        onChange={(e) => set('company_email', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Website</label>
-                      <input value={form.company_website} onChange={(e) => set('company_website', e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Website
+                      </label>
+                      <input
+                        value={form.company_website}
+                        onChange={(e) => set('company_website', e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Industry</label>
-                      <input value={form.company_industry} onChange={(e) => set('company_industry', e.target.value)} required placeholder="Software"
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Industry
+                      </label>
+                      <input
+                        value={form.company_industry}
+                        onChange={(e) => set('company_industry', e.target.value)}
+                        required
+                        placeholder="Software"
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">Location</label>
-                      <input value={form.company_location} onChange={(e) => set('company_location', e.target.value)} required
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        Location
+                      </label>
+                      <input
+                        value={form.company_location}
+                        onChange={(e) => set('company_location', e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">HR Name</label>
-                      <input value={form.hr_spoc_name} onChange={(e) => set('hr_spoc_name', e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        HR Name
+                      </label>
+                      <input
+                        value={form.hr_spoc_name}
+                        onChange={(e) => set('hr_spoc_name', e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">HR Email</label>
-                      <input type="email" value={form.hr_spoc_email} onChange={(e) => set('hr_spoc_email', e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        HR Email
+                      </label>
+                      <input
+                        type="email"
+                        value={form.hr_spoc_email}
+                        onChange={(e) => set('hr_spoc_email', e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                     <div>
-                      <label className="block font-label-md font-semibold text-on-surface mb-2">HR Phone</label>
-                      <input value={form.hr_spoc_phone} onChange={(e) => set('hr_spoc_phone', e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container" />
+                      <label className="block font-label-md font-semibold text-on-surface mb-2">
+                        HR Phone
+                      </label>
+                      <input
+                        value={form.hr_spoc_phone}
+                        onChange={(e) => set('hr_spoc_phone', e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-container"
+                      />
                     </div>
                   </div>
                 </>
               )}
 
-              <button type="submit" disabled={loading}
-                className="w-full py-3 bg-primary text-on-primary font-label-md font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-60">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-primary text-on-primary font-label-md font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-60"
+              >
                 {loading ? 'Creating…' : 'Create Account'}
               </button>
 
               <div className="text-center mt-4">
-                <span className="font-body-md text-on-surface-variant">Already have an account? </span>
-                <Link to={ROUTES.LOGIN} className="text-primary font-label-md font-semibold hover:underline">
+                <span className="font-body-md text-on-surface-variant">
+                  Already have an account?{' '}
+                </span>
+                <Link
+                  to={ROUTES.LOGIN}
+                  className="text-primary font-label-md font-semibold hover:underline"
+                >
                   Sign In
                 </Link>
               </div>

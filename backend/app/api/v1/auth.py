@@ -17,19 +17,21 @@ async def me(
     result = await db.execute(select(User).where(User.id == user["id"]))
     db_user = result.scalar_one_or_none()
 
+    user_meta = user.get("raw", {}).get("user_metadata", {}) or {}
+
     if not db_user:
         return {
             "id": user["id"],
             "email": user["email"],
-            "name": None,
-            "role": "student",
+            "name": user["name"] or user_meta.get("name"),
+            "role": user["role"],
             "status": "active",
             "is_super_admin": False,
             "institute": None,
         }
 
     # Role lookup
-    role_code = "student"
+    role_code = user["role"]
     if db_user.role_id:
         role_result = await db.execute(
             select(Role).where(Role.id == db_user.role_id)
@@ -49,7 +51,7 @@ async def me(
     return {
         "id": str(db_user.id),
         "email": db_user.email,
-        "name": db_user.name,
+        "name": db_user.name or user_meta.get("name"),
         "role": role_code,
         "status": db_user.status,
         "is_super_admin": db_user.is_super_admin,

@@ -9,6 +9,7 @@ import FilterBar from '../../components/common/FilterBar.jsx';
 import { APPLICANTS_LIST } from '../../data/mockData.js';
 import { ROUTES } from '../../constants/routes.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import { useCompanyApplicants } from '../../hooks/useCompanyApplicants.js';
 
 const CompanyApplicantsPage = () => {
   const navigate = useNavigate();
@@ -16,17 +17,47 @@ const CompanyApplicantsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const filtered = APPLICANTS_LIST.filter((app) => {
+  const { applicants: apiApplicants, loading, actingId, updateStatus } =
+    useCompanyApplicants(statusFilter);
+
+  // Normalize API data or fallback to mock data if empty
+  const rawList =
+    apiApplicants && apiApplicants.length > 0
+      ? apiApplicants.map((app) => ({
+          id: app.id,
+          name: app.student?.name || 'Applicant',
+          email: app.student?.email || '',
+          college: 'Partner Institute',
+          branch: app.student?.email ? app.student.email.split('@')[1] || 'Engineering' : 'CS',
+          cgpa: '8.5',
+          appliedFor: app.internship?.title || 'Internship',
+          aiMatch: Math.round(app.ai_match_score || 85),
+          appliedAt: app.applied_at
+            ? new Date(app.applied_at).toLocaleDateString()
+            : 'Recently',
+          status: app.status,
+        }))
+      : APPLICANTS_LIST;
+
+  const filtered = rawList.filter((app) => {
     const matchesSearch =
       app.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.college.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.branch.toLowerCase().includes(searchTerm.toLowerCase());
+      app.branch.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      app.appliedFor.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleAction = (id, actionName) => {
-    toast.success(`Applicant ${actionName} successfully.`);
+  const handleAction = async (id, newStatus) => {
+    try {
+      if (apiApplicants && apiApplicants.some((a) => a.id === id)) {
+        await updateStatus(id, newStatus);
+      }
+      toast.success(`Applicant status updated to '${newStatus}'`);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to update status');
+    }
   };
 
   const columns = [
@@ -41,7 +72,7 @@ const CompanyApplicantsPage = () => {
           <div>
             <span className="font-semibold text-on-surface">{row.name}</span>
             <p className="text-xs text-on-surface-variant">
-              {row.college} • {row.branch} (CGPA {row.cgpa})
+              {row.college} • {row.branch}
             </p>
           </div>
         </div>
@@ -82,20 +113,22 @@ const CompanyApplicantsPage = () => {
           {row.status === 'pending' && (
             <>
               <button
+                disabled={actingId === row.id}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleAction(row.id, 'shortlisted');
                 }}
-                className="px-2 py-1 text-xs bg-surface-container-high rounded text-on-surface hover:bg-surface-container-highest"
+                className="px-2 py-1 text-xs bg-surface-container-high rounded text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
               >
                 Shortlist
               </button>
               <button
+                disabled={actingId === row.id}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleAction(row.id, 'approved');
                 }}
-                className="px-2 py-1 text-xs bg-emerald-600 text-white rounded font-medium hover:bg-emerald-700"
+                className="px-2 py-1 text-xs bg-emerald-600 text-white rounded font-medium hover:bg-emerald-700 disabled:opacity-50"
               >
                 Approve
               </button>
@@ -111,12 +144,20 @@ const CompanyApplicantsPage = () => {
       <PageHeader
         title="Applicant Pipeline"
         breadcrumb="Company / Applicants"
-        badge={<span className="text-xs font-semibold px-2 py-0.5 bg-primary-fixed/40 text-primary rounded-full">{filtered.length} Applicants</span>}
+        badge={
+          <span className="text-xs font-semibold px-2 py-0.5 bg-primary-fixed/40 text-primary rounded-full">
+            {filtered.length} Applicants
+          </span>
+        }
       />
 
       <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <SearchBar placeholder="Search applicant by name, college, branch..." value={searchTerm} onChange={setSearchTerm} />
+          <SearchBar
+            placeholder="Search applicant by name, college, position..."
+            value={searchTerm}
+            onChange={setSearchTerm}
+          />
           <FilterBar
             filters={[
               {
@@ -139,7 +180,10 @@ const CompanyApplicantsPage = () => {
         <DataTable
           columns={columns}
           data={filtered}
-          onRowClick={(row) => navigate(ROUTES.COMPANY.APPLICANT_DETAIL.replace(':id', row.id))}
+          loading={loading}
+          onRowClick={(row) =>
+            navigate(ROUTES.COMPANY.APPLICANT_DETAIL.replace(':id', row.id))
+          }
         />
       </div>
     </div>
