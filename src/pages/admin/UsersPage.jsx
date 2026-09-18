@@ -1,180 +1,171 @@
-import { useState } from 'react';
-import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
+import { useAdminUsers } from '../../hooks/useAdminUsers.js';
+import { useToast } from '../../store/ToastContext.jsx';
 import DataTable from '../../components/common/DataTable.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import SearchBar from '../../components/common/SearchBar.jsx';
-import FilterBar from '../../components/common/FilterBar.jsx';
-import Modal from '../../components/common/Modal.jsx';
-import { USERS_LIST } from '../../data/mockData.js';
-import { useToast } from '../../store/ToastContext.jsx';
 
-const AdminUsersPage = () => {
+const ROLE_OPTIONS = [
+  { value: 'all', label: 'All Roles' },
+  { value: 'student', label: 'Students' },
+  { value: 'faculty', label: 'Faculty' },
+  { value: 'company', label: 'Companies' },
+  { value: 'admin', label: 'Admins' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Pending' },
+  { value: 'suspended', label: 'Suspended' },
+];
+
+const UsersPage = () => {
+  const {
+    users, loading, error, approve, reject,
+    search, setSearch,
+    roleFilter, setRoleFilter,
+    statusFilter, setStatusFilter,
+  } = useAdminUsers();
   const { toast } = useToast();
-  const [users, setUsers] = useState(USERS_LIST);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [editRole, setEditRole] = useState('student');
-
-  const filtered = users.filter((u) => {
-    const matchesSearch =
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
-
-  const handleToggleStatus = (userId) => {
-    setUsers(
-      users.map((u) =>
-        u.id === userId ? { ...u, status: u.status === 'active' ? 'inactive' : 'active' } : u
-      )
-    );
-    toast.success('User status updated');
-  };
-
-  const handleSaveRole = () => {
-    setUsers(users.map((u) => (u.id === selectedUser.id ? { ...u, role: editRole } : u)));
-    toast.success(`Role updated to ${editRole} for ${selectedUser.name}`);
-    setSelectedUser(null);
-  };
 
   const columns = [
     {
-      header: 'User Name',
-      accessor: 'name',
+      key: 'name',
+      label: 'User Name',
       render: (row) => (
         <div>
-          <span className="font-semibold text-on-surface">{row.name}</span>
+          <p className="font-semibold text-on-surface">{row.name || '—'}</p>
           <p className="text-xs text-on-surface-variant">{row.email}</p>
         </div>
       ),
     },
     {
-      header: 'Role',
-      accessor: 'role',
+      key: 'role',
+      label: 'Role',
       render: (row) => (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-surface-container-high text-primary">
+        <span className="px-2 py-0.5 rounded-full bg-surface-container text-xs font-semibold uppercase">
           {row.role}
         </span>
       ),
     },
     {
-      header: 'Status',
-      accessor: 'status',
+      key: 'institute',
+      label: 'Institute',
+      render: (row) => row.institute || '—',
+    },
+    {
+      key: 'status',
+      label: 'Status',
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
-      header: 'Joined Date',
-      accessor: 'joined',
+      key: 'created_at',
+      label: 'Joined',
+      render: (row) =>
+        row.created_at
+          ? new Date(row.created_at).toLocaleDateString('en-IN')
+          : '—',
     },
     {
-      header: 'Actions',
-      accessor: 'id',
-      render: (row) => (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              setSelectedUser(row);
-              setEditRole(row.role);
-            }}
-            className="px-2.5 py-1 text-xs bg-surface-container-high rounded text-on-surface hover:bg-surface-container-highest font-medium"
-          >
-            Edit Role
-          </button>
-          <button
-            onClick={() => handleToggleStatus(row.id)}
-            className={`px-2.5 py-1 text-xs rounded font-medium ${
-              row.status === 'active'
-                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-            }`}
-          >
-            {row.status === 'active' ? 'Deactivate' : 'Activate'}
-          </button>
-        </div>
-      ),
+      key: 'actions',
+      label: 'Actions',
+      render: (row) => {
+        if (row.status === 'active') {
+          return <span className="text-xs text-on-surface-variant">—</span>;
+        }
+        if (row.status === 'suspended') {
+          return (
+            <span className="text-xs text-error font-semibold">Suspended</span>
+          );
+        }
+        return (
+          <div className="flex gap-2">
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await approve(row.id);
+                  toast.success(`${row.name} approved`);
+                } catch (err) {
+                  toast.error(err?.message || 'Approve failed');
+                }
+              }}
+              className="px-3 py-1 rounded bg-tertiary text-on-tertiary text-xs font-semibold hover:opacity-90"
+            >
+              Approve
+            </button>
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await reject(row.id);
+                  toast.success(`${row.name} rejected`);
+                } catch (err) {
+                  toast.error(err?.message || 'Reject failed');
+                }
+              }}
+              className="px-3 py-1 rounded bg-error text-on-error text-xs font-semibold hover:opacity-90"
+            >
+              Reject
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
   return (
-    <div className="flex flex-col w-full space-y-6">
-      <PageHeader
-        title="User Management"
-        breadcrumb="Admin / Users"
-        badge={<span className="text-xs font-semibold px-2.5 py-0.5 bg-primary-fixed/40 text-primary rounded-full">{users.length} Total Users</span>}
-      />
-
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <SearchBar placeholder="Search by name or email..." value={searchTerm} onChange={setSearchTerm} />
-          <FilterBar
-            filters={[
-              {
-                id: 'role',
-                label: 'Role',
-                options: [
-                  { label: 'All Roles', value: 'all' },
-                  { label: 'Student', value: 'student' },
-                  { label: 'Faculty', value: 'faculty' },
-                  { label: 'Company', value: 'company' },
-                  { label: 'Admin', value: 'admin' },
-                ],
-                value: roleFilter,
-                onChange: setRoleFilter,
-              },
-            ]}
-          />
-        </div>
-
-        <DataTable columns={columns} data={filtered} />
+    <div className="flex flex-col w-full gap-space-lg">
+      <div>
+        <h1 className="font-headline-xl font-bold text-on-surface">
+          User Management
+        </h1>
+        <p className="font-body-md text-on-surface-variant mt-1">
+          Approve, reject, and manage all platform users
+        </p>
       </div>
 
-      {/* Edit Role Modal */}
-      {selectedUser && (
-        <Modal
-          open={Boolean(selectedUser)}
-          onClose={() => setSelectedUser(null)}
-          title="Edit User Role"
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="px-4 py-2 border rounded-lg font-label-md text-label-md text-on-surface-variant"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveRole}
-                className="px-6 py-2 bg-primary text-on-primary font-label-md text-label-md font-bold rounded-lg hover:bg-primary/90"
-              >
-                Save Changes
-              </button>
-            </div>
-          }
+      <div className="flex flex-col sm:flex-row gap-3 items-center">
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by name or email…"
+          className="flex-1"
+        />
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="h-9 px-3 rounded-lg border border-outline-variant/60 bg-surface-container-low text-sm"
         >
-          <div className="space-y-4">
-            <p className="font-body-md text-body-md text-on-surface">
-              Change role access for <strong className="font-bold">{selectedUser.name}</strong> ({selectedUser.email}):
-            </p>
-            <div>
-              <label className="block font-label-md text-label-md text-on-surface mb-1 font-semibold">Select Role</label>
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value)}
-                className="w-full px-3 py-2 bg-surface-container rounded-lg font-body-md text-body-md font-semibold text-on-surface"
-              >
-                <option value="student">Student</option>
-                <option value="faculty">Faculty Mentor</option>
-                <option value="company">Company Partner</option>
-                <option value="admin">System Admin</option>
-              </select>
-            </div>
-          </div>
-        </Modal>
-      )}
+          {ROLE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="h-9 px-3 rounded-lg border border-outline-variant/60 bg-surface-container-low text-sm"
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={users}
+        loading={loading}
+        emptyIcon="group_off"
+        emptyTitle={error ? 'Could not load users' : 'No users found'}
+        emptyDescription={error || 'Try adjusting filters.'}
+      />
     </div>
   );
 };
 
-export default AdminUsersPage;
+export default UsersPage;

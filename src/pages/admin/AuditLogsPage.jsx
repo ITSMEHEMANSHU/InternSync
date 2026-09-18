@@ -1,83 +1,125 @@
-import { useState } from 'react';
-import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
+import { useEffect, useState } from 'react';
+import { adminService } from '../../services/adminService.js';
 import DataTable from '../../components/common/DataTable.jsx';
-import SearchBar from '../../components/common/SearchBar.jsx';
-import { AUDIT_LOGS } from '../../data/mockData.js';
-import { useToast } from '../../store/ToastContext.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
 
-const AdminAuditLogsPage = () => {
-  const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [expandedLogId, setExpandedLogId] = useState(null);
+const AuditLogsPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const filtered = AUDIT_LOGS.filter(
-    (log) =>
-      log.actor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.entity.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    adminService
+      .getAuditLogs(200)
+      .then((d) => setLogs(Array.isArray(d) ? d : []))
+      .catch((err) => setError(err?.message || 'Failed to load'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   const columns = [
-    { header: 'Timestamp', accessor: 'timestamp' },
     {
-      header: 'Actor / User',
-      accessor: 'actor',
-      render: (r) => <span className="font-semibold text-on-surface">{r.actor}</span>,
+      key: 'created_at',
+      label: 'Timestamp',
+      render: (r) =>
+        r.created_at ? new Date(r.created_at).toLocaleString('en-IN') : '—',
     },
     {
-      header: 'Action',
-      accessor: 'action',
+      key: 'actor_name',
+      label: 'Actor',
       render: (r) => (
-        <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-primary-fixed/30 text-primary">
+        <div>
+          <p className="font-semibold text-on-surface">{r.actor_name}</p>
+          {r.actor_role && (
+            <p className="text-xs text-on-surface-variant uppercase">
+              {r.actor_role}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'action',
+      label: 'Action',
+      render: (r) => (
+        <span className="px-2 py-0.5 rounded bg-primary-fixed text-on-primary-fixed text-xs font-semibold">
           {r.action}
         </span>
       ),
     },
-    { header: 'Target Entity', accessor: 'entity' },
     {
-      header: 'IP Address',
-      accessor: 'ip',
-      render: (r) => <span className="font-mono text-xs text-on-surface-variant">{r.ip}</span>,
+      key: 'entity_type',
+      label: 'Target Entity',
+      render: (r) => (
+        <div>
+          <p className="text-sm text-on-surface">{r.entity_type || '—'}</p>
+          {r.entity_id && (
+            <p className="text-xs text-on-surface-variant font-mono">
+              {r.entity_id.slice(0, 8)}…
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'metadata',
+      label: 'Details',
+      render: (r) =>
+        r.metadata && Object.keys(r.metadata).length > 0 ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-primary">View</summary>
+            <pre className="mt-1 p-2 bg-surface-container rounded text-[10px] overflow-auto max-w-xs">
+              {JSON.stringify(r.metadata, null, 2)}
+            </pre>
+          </details>
+        ) : (
+          '—'
+        ),
     },
   ];
 
-  const handleExport = () => {
-    toast.success('Audit logs exported to CSV format.');
-  };
-
   return (
-    <div className="flex flex-col w-full space-y-6">
-      <PageHeader
-        title="Audit Logs & Compliance Trail"
-        breadcrumb="Admin / Audit Logs"
-        actions={[
-          {
-            label: 'Export CSV',
-            onClick: handleExport,
-            variant: 'outline',
-          },
-        ]}
-      />
-
-      <div className="bg-surface-container-lowest rounded-xl shadow-sm p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <SearchBar placeholder="Search by actor, action, or entity..." value={searchTerm} onChange={setSearchTerm} />
-          <span className="font-body-sm text-body-sm text-on-surface-variant font-semibold">
-            Showing {filtered.length} audit entries
-          </span>
+    <div className="flex flex-col w-full gap-space-lg">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-headline-xl font-bold text-on-surface">
+            Audit Logs
+          </h1>
+          <p className="font-body-md text-on-surface-variant mt-1">
+            Every approval, verification, and policy change — auto-logged
+          </p>
         </div>
+        <button
+          onClick={load}
+          className="px-4 py-2 rounded-lg bg-surface-container font-label-md font-semibold"
+        >
+          Refresh
+        </button>
+      </div>
 
+      {!loading && !error && logs.length === 0 ? (
+        <EmptyState
+          icon="history"
+          title="No audit events yet"
+          description="Actions like approvals, verifications, and policy updates will appear here."
+        />
+      ) : (
         <DataTable
           columns={columns}
-          data={filtered}
-          onRowClick={(row) => {
-            setExpandedLogId(expandedLogId === row.id ? null : row.id);
-            toast.info(`Log details: ${row.action} on ${row.entity} by ${row.actor}`);
-          }}
+          data={logs}
+          loading={loading}
+          emptyIcon="history"
+          emptyTitle={error ? 'Could not load logs' : 'No audit events'}
+          emptyDescription={error || ''}
         />
-      </div>
+      )}
     </div>
   );
 };
 
-export default AdminAuditLogsPage;
+export default AuditLogsPage;
