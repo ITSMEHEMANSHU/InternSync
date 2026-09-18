@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { facultyService } from '../../services/api.js';
+import { facultyService } from '../../services/facultyService.js';
 import { useToast } from '../../store/ToastContext.jsx';
 import { ROUTES } from '../../constants/routes.js';
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
@@ -21,7 +21,7 @@ const ApprovalDetailPage = () => {
   useEffect(() => {
     let mounted = true;
     facultyService
-      .getApprovalDetail(id)
+      .getApplicationDetail(id)
       .then((data) => mounted && setApp(data))
       .catch((err) => toast.error(err?.message || 'Failed to load'))
       .finally(() => mounted && setLoading(false));
@@ -31,7 +31,7 @@ const ApprovalDetailPage = () => {
   const handleApprove = async () => {
     setActing(true);
     try {
-      await facultyService.approve(id);
+      await facultyService.approveApplication(id);
       toast.success('Application approved — sent to company');
       navigate(ROUTES.FACULTY.APPROVALS);
     } catch (err) {
@@ -44,7 +44,7 @@ const ApprovalDetailPage = () => {
   const handleReject = async () => {
     setActing(true);
     try {
-      await facultyService.reject(id, reason);
+      await facultyService.rejectApplication(id, reason);
       toast.success('Application rejected');
       navigate(ROUTES.FACULTY.APPROVALS);
     } catch (err) {

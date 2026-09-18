@@ -4,9 +4,11 @@ import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import BarChartCard from '../../components/common/charts/BarChartCard.jsx';
 import LineChartCard from '../../components/common/charts/LineChartCard.jsx';
 import DonutChartCard from '../../components/common/charts/DonutChartCard.jsx';
+import { useFacultyAnalytics } from '../../hooks/useFacultyAnalytics.js';
 
 const AnalyticsPage = () => {
   const { toast } = useToast();
+  const { analytics, loading } = useFacultyAnalytics();
   const [dateRange, setDateRange] = useState('6m');
 
   const placementData = [
@@ -15,7 +17,7 @@ const AnalyticsPage = () => {
     { month: 'Aug', placements: 18 },
     { month: 'Sep', placements: 24 },
     { month: 'Oct', placements: 30 },
-    { month: 'Nov', placements: 36 },
+    { month: 'Nov', placements: analytics?.total_placed || 36 },
   ];
 
   const companyData = [
@@ -35,7 +37,10 @@ const AnalyticsPage = () => {
     { week: 'W6', percent: 92 },
   ];
 
-  const branchData = [
+  const branchData = analytics?.department_distribution?.map((d) => ({
+    name: d.dept,
+    value: d.placed,
+  })) || [
     { name: 'CSE', value: 18 },
     { name: 'ECE', value: 12 },
     { name: 'IT', value: 10 },
@@ -45,6 +50,10 @@ const AnalyticsPage = () => {
   const handleExport = (format) => {
     toast.success(`Report exported as ${format.toUpperCase()}`);
   };
+
+  if (loading) {
+    return <div className="p-8 text-center text-on-surface-variant font-body-md">Loading Analytics...</div>;
+  }
 
   return (
     <div className="flex flex-col w-full">
@@ -103,4 +112,4 @@ const AnalyticsPage = () => {
   );
 };
 
-export default AnalyticsPage;
+export default AnalyticsPage;

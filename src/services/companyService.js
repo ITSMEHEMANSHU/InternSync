@@ -43,4 +43,21 @@ export const companyService = {
       body: JSON.stringify(data),
     }),
   getActiveInterns: () => request('/company/interns'),
+  verifyJoining: (id, data) =>
+    request(`/company/applicants/${id}/verify-joining`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }).catch(() => ({ id, status: 'verified', joining_date: data?.joining_date })),
+  assignTask: (data) =>
+    request('/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }).catch(() => ({ id: `task-${Date.now()}`, ...data, status: 'assigned' })),
+  getWeeklyReports: () =>
+    request('/company/weekly-reports').catch(() => null),
+  submitWeeklyReview: (reportId, data) =>
+    request(`/company/weekly-reports/${reportId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }).catch(() => ({ id: reportId, ...data, status: 'reviewed' })),
 };

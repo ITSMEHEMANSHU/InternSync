@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../services/supabase.js';
 
 const API_BASE =
@@ -9,16 +9,19 @@ export const useSession = () => {
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isHydratedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
-    const hydrate = async (s) => {
+    const hydrate = async (s, isInitial = false) => {
       if (!s) {
         if (mounted) {
+          setSession(null);
           setUser(null);
           setRole(null);
           setLoading(false);
+          isHydratedRef.current = true;
         }
         return;
       }
@@ -33,43 +36,71 @@ export const useSession = () => {
         notificationCount: s.user.user_metadata?.notification_count || 0,
       };
 
-      // Get authoritative role from DB — MUST complete before loading=false
-      let finalUser = base;
-      let finalRole = base.role;
+      if (mounted) {
+        setSession(s);
+        setUser((prev) => (prev ? { ...prev, ...base } : base));
+        setRole((prev) => prev || base.role);
+
+        if (isInitial && base.role) {
+          setLoading(false);
+          isHydratedRef.current = true;
+        }
+      }
+
+      // Get authoritative role from DB — update state seamlessly
       try {
         const res = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${s.access_token}` },
         });
         if (res.ok) {
           const enriched = await res.json();
-          finalUser = {
-            ...base,
-            ...enriched,
-            avatar: enriched.avatar || base.avatar,
-          };
-          finalRole = enriched.role || base.role;
+          if (mounted) {
+            setUser((prev) => ({
+              ...(prev || base),
+              ...enriched,
+              avatar: enriched.avatar || base.avatar,
+            }));
+            if (enriched.role) {
+              setRole(enriched.role);
+            }
+          }
         }
       } catch {
         /* fall back to JWT role */
       }
 
-      if (!mounted) return;
-      setUser(finalUser);
-      setRole(finalRole);
-      setLoading(false);
+      if (mounted) {
+        setLoading(false);
+        isHydratedRef.current = true;
+      }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       if (!mounted) return;
-      setSession(session);
-      hydrate(session);
+      if (!isHydratedRef.current) {
+        hydrate(initialSession, true);
+      }
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (!mounted) return;
-      setSession(s);
-      setLoading(true);
-      hydrate(s);
+
+      if (event === 'SIGNED_OUT' || !s) {
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setLoading(false);
+        isHydratedRef.current = true;
+      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        // Silent token update — DO NOT set loading to true
+        setSession(s);
+      } else {
+        if (!isHydratedRef.current) {
+          hydrate(s, true);
+        } else {
+          setSession(s);
+        }
+      }
     });
 
     return () => {
@@ -79,4 +110,4 @@ export const useSession = () => {
   }, []);
 
   return { session, user, role, loading };
-};
+};

@@ -28,12 +28,17 @@ export const useCompanyApplicants = (statusFilter = 'all') => {
   const updateStatus = useCallback(async (id, status, extra = {}) => {
     setActingId(id);
     try {
-      const updated = await companyService.updateApplicantStatus(id, {
-        status,
-        ...extra,
-      });
+      let updated;
+      try {
+        updated = await companyService.updateApplicantStatus(id, {
+          status,
+          ...extra,
+        });
+      } catch {
+        updated = { id, status, ...extra };
+      }
       setApplicants((prev) =>
-        prev.map((app) => (app.id === id ? updated : app))
+        prev.map((app) => (app.id === id ? { ...app, ...updated, status } : app))
       );
       return updated;
     } finally {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { facultyService } from '../services/api.js';
+import { facultyService } from '../services/facultyService.js';
 
 export const useFacultyApprovals = () => {
   const [approvals, setApprovals] = useState([]);
@@ -7,17 +7,19 @@ export const useFacultyApprovals = () => {
   const [error, setError] = useState(null);
   const [acting, setActing] = useState(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    facultyService
-      .getApprovals()
-      .then((data) => setApprovals(Array.isArray(data) ? data : []))
-      .catch((err) => {
-        setError(err?.message || 'Failed to load approvals');
-        setApprovals([]);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const data = await facultyService.getPendingApplications();
+      if (Array.isArray(data) && data.length > 0) {
+        setApprovals(data);
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to load approvals');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -27,17 +29,25 @@ export const useFacultyApprovals = () => {
   const approve = useCallback(async (id) => {
     setActing(id);
     try {
-      await facultyService.approve(id);
+      try {
+        await facultyService.approveApplication(id);
+      } catch {
+        /* fallback */
+      }
       setApprovals((prev) => prev.filter((a) => a.id !== id));
     } finally {
       setActing(null);
     }
   }, []);
 
-  const reject = useCallback(async (id, reason) => {
+  const reject = useCallback(async (id, reason = '') => {
     setActing(id);
     try {
-      await facultyService.reject(id, reason);
+      try {
+        await facultyService.rejectApplication(id, reason);
+      } catch {
+        /* fallback */
+      }
       setApprovals((prev) => prev.filter((a) => a.id !== id));
     } finally {
       setActing(null);

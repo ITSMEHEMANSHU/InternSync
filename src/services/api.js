@@ -2,8 +2,8 @@ import { supabase } from './supabase.js';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
-export const request = async (endpoint, options = {}) => {
-  const { data: { session } } = await supabase.auth.getSession();
+export const request = async (endpoint, options = {}, isRetry = false) => {
+  let { data: { session } } = await supabase.auth.getSession();
 
   const headers = {
     'Content-Type': 'application/json',
@@ -17,6 +17,13 @@ export const request = async (endpoint, options = {}) => {
     ...options,
     headers,
   });
+
+  if (res.status === 401 && !isRetry) {
+    const { data: refreshData, error } = await supabase.auth.refreshSession();
+    if (!error && refreshData?.session) {
+      return request(endpoint, options, true);
+    }
+  }
 
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));

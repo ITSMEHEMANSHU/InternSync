@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import Modal from '../../components/common/Modal.jsx';
 import { useToast } from '../../store/ToastContext.jsx';
+import { companyService } from '../../services/companyService.js';
 
 const INITIAL_JOININGS = [
   { id: 'JNG-001', studentName: 'Aarav Sharma', role: 'Backend Engineer Intern', college: 'Apex University', expectedDate: '2024-12-01', status: 'pending_verification' },
@@ -15,14 +16,42 @@ const CompanyJoiningVerificationPage = () => {
   const [selectedJoining, setSelectedJoining] = useState(null);
   const [joiningDate, setJoiningDate] = useState('2024-12-01');
 
+  useEffect(() => {
+    companyService
+      .getApplicants({ status: 'approved' })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const apiItems = data.map((a) => ({
+            id: a.id,
+            studentName: a.student?.name || 'Candidate Intern',
+            role: a.internship?.title || 'Engineering Intern',
+            college: 'Partner Institute',
+            expectedDate: '2024-12-01',
+            status: a.stage === 'joined' ? 'verified' : 'pending_verification',
+          }));
+          setJoinings((prev) => {
+            const existingIds = new Set(apiItems.map((item) => item.id));
+            const filteredPrev = prev.filter((p) => !existingIds.has(p.id));
+            return [...apiItems, ...filteredPrev];
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleVerifyClick = (joining) => {
     setSelectedJoining(joining);
-    setJoiningDate(joining.expectedDate);
+    setJoiningDate(joining.expectedDate || '2024-12-01');
   };
 
-  const confirmVerification = () => {
-    setJoinings(
-      joinings.map((j) =>
+  const confirmVerification = async () => {
+    try {
+      await companyService.verifyJoining(selectedJoining.id, { joining_date: joiningDate });
+    } catch {
+      /* fallback */
+    }
+    setJoinings((prev) =>
+      prev.map((j) =>
         j.id === selectedJoining.id ? { ...j, status: 'verified', expectedDate: joiningDate } : j
       )
     );

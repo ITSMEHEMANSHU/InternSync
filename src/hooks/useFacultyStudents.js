@@ -1,24 +1,49 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { facultyService } from '../services/facultyService.js';
 import { STUDENTS_LIST, FACULTY_KPIS } from '../data/mockData.js';
 
 export const useFacultyStudents = () => {
-  const [students, setStudents] = useState([]);
-  const [kpis, setKpis] = useState([]);
+  const [students, setStudents] = useState(STUDENTS_LIST);
+  const [kpis, setKpis] = useState(FACULTY_KPIS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [riskFilter, setRiskFilter] = useState('all');
 
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await facultyService.getStudents(search);
+      if (Array.isArray(data) && data.length > 0) {
+        setStudents(data);
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to fetch students');
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
   useEffect(() => {
-    // TODO: facultyService.getStudents(facultyId)
-    const t = setTimeout(() => { setStudents(STUDENTS_LIST); setKpis(FACULTY_KPIS); setLoading(false); }, 500);
-    return () => clearTimeout(t);
-  }, []);
+    fetchStudents();
+  }, [fetchStudents]);
 
   const filtered = students.filter((s) => {
-    if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !s.name?.toLowerCase().includes(search.toLowerCase())) return false;
     if (riskFilter !== 'all' && s.risk !== riskFilter) return false;
     return true;
   });
 
-  return { students: filtered, kpis, loading, search, setSearch, riskFilter, setRiskFilter };
+  return {
+    students: filtered,
+    kpis,
+    loading,
+    error,
+    search,
+    setSearch,
+    riskFilter,
+    setRiskFilter,
+    reload: fetchStudents,
+  };
 };

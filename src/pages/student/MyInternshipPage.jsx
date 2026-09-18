@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../constants/routes.js';
 import Tabs from '../../components/common/Tabs.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
+import Skeleton from '../../components/common/Skeleton.jsx';
+import EmptyState from '../../components/common/EmptyState.jsx';
+import { useMyInternship } from '../../hooks/useMyInternship.js';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'dashboard' },
@@ -14,6 +17,34 @@ const TABS = [
 const MyInternshipPage = () => {
   const [tab, setTab] = useState('overview');
   const navigate = useNavigate();
+  const { assignment, loading, error } = useMyInternship();
+
+  if (loading) {
+    return <Skeleton variant="card" count={2} />;
+  }
+
+  if (!assignment) {
+    return (
+      <div className="flex flex-col w-full gap-space-lg">
+        <EmptyState
+          icon="work_history"
+          title="No Active Internship"
+          description="You do not have an active internship assignment yet. Browse postings and submit applications to get placed."
+          action={{
+            label: 'Browse Internships',
+            icon: 'search',
+            onClick: () => navigate(ROUTES.STUDENT.INTERNSHIPS),
+          }}
+        />
+      </div>
+    );
+  }
+
+  const companyName = assignment.company?.name || 'Company Partner';
+  const internshipTitle = assignment.internship?.title || 'Software Engineering Intern';
+  const location = assignment.internship?.location || 'Remote / Hybrid';
+  const startDate = assignment.start_date || 'Jun 2024';
+  const endDate = assignment.end_date || 'Nov 2024';
 
   return (
     <div className="flex flex-col w-full gap-space-lg">
@@ -27,11 +58,11 @@ const MyInternshipPage = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-headline-md text-headline-md font-bold text-on-surface">Zoho Corporation</h1>
-                <StatusBadge status="active" />
+                <h1 className="font-headline-md text-headline-md font-bold text-on-surface">{companyName}</h1>
+                <StatusBadge status={assignment.status} />
               </div>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">Backend Engineer Intern · Jun 2024 – Nov 2024</p>
-              <p className="font-body-xs text-body-xs text-on-surface-variant mt-0.5">Mentor: Rajesh Iyer · Chennai, Tamil Nadu</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">{internshipTitle} · {startDate} – {endDate}</p>
+              <p className="font-body-xs text-body-xs text-on-surface-variant mt-0.5">{location}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

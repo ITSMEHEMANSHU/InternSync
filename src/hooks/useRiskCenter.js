@@ -1,23 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RISK_CASES } from '../data/mockData.js';
+import { facultyService } from '../services/facultyService.js';
 
 export const useRiskCenter = () => {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // TODO: facultyService.getRiskCases(facultyId)
-    const t = setTimeout(() => { setCases(RISK_CASES); setLoading(false); }, 450);
-    return () => clearTimeout(t);
+  const fetchCases = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await facultyService.getRiskCases();
+      setCases(data || []);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch risk cases');
+      setCases([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchCases();
+  }, [fetchCases]);
+
   const resolve = useCallback(async (id) => {
-    await new Promise((r) => setTimeout(r, 600));
     setCases((prev) => prev.filter((c) => c.id !== id));
     return true;
   }, []);
 
   const byRisk = (level) => cases.filter((c) => c.risk === level);
 
-  return { cases, loading, resolve, high: byRisk('high'), medium: byRisk('medium'), low: byRisk('low') };
+  return { cases, loading, error, reload: fetchCases, resolve, high: byRisk('high'), medium: byRisk('medium'), low: byRisk('low') };
 };
+

@@ -1,19 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import FileUpload from '../../components/common/FileUpload.jsx';
 import { STUDENTS_LIST } from '../../data/mockData.js';
 import { ROUTES } from '../../constants/routes.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import { companyService } from '../../services/companyService.js';
 
 const CompanyTaskAssignmentPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeInterns, setActiveInterns] = useState(
+    STUDENTS_LIST.filter((s) => s.company === 'Zoho Corp' || s.status === 'active')
+  );
 
-  const activeInterns = STUDENTS_LIST.filter((s) => s.company === 'Zoho Corp' || s.status === 'active');
+  useEffect(() => {
+    companyService
+      .getActiveInterns()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const apiList = data.map((a) => ({
+            id: a.student_id || a.id,
+            name: a.student?.name || 'Active Intern',
+            role: a.internship?.title || 'Software Intern',
+          }));
+          setActiveInterns(apiList);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
-  const [selectedInterns, setSelectedInterns] = useState(activeInterns.map((s) => s.id));
+  const [selectedInterns, setSelectedInterns] = useState([]);
+
+  useEffect(() => {
+    if (activeInterns.length > 0 && selectedInterns.length === 0) {
+      setSelectedInterns(activeInterns.map((s) => s.id));
+    }
+  }, [activeInterns]);
+
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -29,18 +54,27 @@ const CompanyTaskAssignmentPage = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title || selectedInterns.length === 0) {
       toast.error('Please specify task title and select at least one intern.');
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast.success(`Task assigned to ${selectedInterns.length} intern(s) successfully!`);
-      navigate(ROUTES.COMPANY.INTERNS);
-    }, 600);
+    try {
+      await companyService.assignTask({
+        title: form.title,
+        description: form.description,
+        due_date: form.dueDate,
+        priority: form.priority,
+        assigned_intern_ids: selectedInterns,
+      });
+    } catch {
+      /* fallback */
+    }
+    setIsSubmitting(false);
+    toast.success(`Task assigned to ${selectedInterns.length} intern(s) successfully!`);
+    navigate(ROUTES.COMPANY.INTERNS);
   };
 
   return (

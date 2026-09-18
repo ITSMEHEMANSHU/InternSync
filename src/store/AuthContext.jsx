@@ -9,16 +9,15 @@ export const AuthProvider = ({ children }) => {
   const [activeRole, setActiveRole] = useState(null);
 
   useEffect(() => {
-    if (sessionRole) {
-      setActiveRole(sessionRole);
-    }
-  }, [sessionRole]);
+    setActiveRole(sessionRole);
+  }, [sessionRole, session?.user?.id]);
 
   const switchRole = useCallback((newRole) => {
     setActiveRole(newRole);
   }, []);
 
   const login = useCallback(async (email, password) => {
+    setActiveRole(null);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -28,6 +27,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const register = useCallback(async ({ email, password, name, role, metadata }) => {
+    setActiveRole(null);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(async () => {
+    setActiveRole(null);
     await supabase.auth.signOut();
   }, []);
 

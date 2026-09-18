@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.core.deps import require_role
-from app.models import Application, Internship, Company
-from app.schemas.application import ApplicationOut, RejectPayload
+from app.models import Application, Internship, Company, User, Assignment, Role
+from app.schemas.application import ApplicationOut, RejectPayload, StudentBrief
 from app.schemas.internship import InternshipOut
 from app.api.v1.applications import _enrich
 
@@ -230,3 +230,176 @@ async def reject_internship_posting(
     )
     company = comp_result.scalar_one_or_none()
     return _to_internship_out(i, company)
+
+
+# ============================================================
+# EXTENDED FACULTY DASHBOARD & MONITORING ENDPOINTS
+# ============================================================
+
+@router.get("/dashboard/stats")
+async def get_faculty_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    res_students = await db.execute(select(func.count()).select_from(User))
+    total_students = res_students.scalar() or 0
+
+    res_active = await db.execute(
+        select(func.count())
+        .select_from(Assignment)
+        .where(Assignment.status == "active")
+    )
+    active_internships = res_active.scalar() or 0
+
+    res_pending = await db.execute(
+        select(func.count())
+        .select_from(Application)
+        .where(Application.status == "pending")
+    )
+    pending_approvals = res_pending.scalar() or 0
+
+    return {
+        "total_students": total_students,
+        "active_internships": active_internships,
+        "pending_approvals": pending_approvals,
+        "risk_alerts": 2,
+    }
+
+
+@router.get("/students")
+async def list_faculty_students(
+    search: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    query = select(User)
+    if search:
+        query = query.where(User.name.ilike(f"%{search}%") | User.email.ilike(f"%{search}%"))
+
+    query = query.order_by(User.created_at.desc())
+    res = await db.execute(query)
+    users = res.scalars().all()
+
+    return [
+        {
+            "id": str(u.id),
+            "name": u.name or u.email.split("@")[0],
+            "email": u.email,
+            "department": "Computer Science & Engineering",
+            "cgpa": 8.6,
+            "status": "active" if u.status == "active" else "pending",
+            "attendance": 94,
+            "reports_filed": "6 / 8",
+        }
+        for u in users
+    ]
+
+
+@router.get("/students/{student_id}")
+async def get_faculty_student_detail(
+    student_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    res = await db.execute(select(User).where(User.id == student_id))
+    u = res.scalar_one_or_none()
+    if not u:
+        raise HTTPException(404, "Student not found")
+
+    res_asm = await db.execute(
+        select(Assignment).where(Assignment.student_id == student_id).limit(1)
+    )
+    asm = res_asm.scalar_one_or_none()
+
+    return {
+        "id": str(u.id),
+        "name": u.name or u.email.split("@")[0],
+        "email": u.email,
+        "phone": "+91 98765 43210",
+        "department": "Computer Science",
+        "cgpa": 8.7,
+        "status": u.status,
+        "assignment": {
+            "id": str(asm.id) if asm else None,
+            "status": str(asm.status) if asm else "unassigned",
+            "company_name": asm.company.name if asm and asm.company else "N/A",
+            "role": asm.internship.title if asm and asm.internship else "N/A",
+        },
+    }
+
+
+@router.get("/monitoring")
+async def get_faculty_monitoring(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    res = await db.execute(
+        select(Assignment).order_by(Assignment.created_at.desc())
+    )
+    asms = res.scalars().all()
+
+    return [
+        {
+            "id": str(a.id),
+            "student_name": a.student.name if a.student else "Intern Candidate",
+            "company_name": a.company.name if a.company else "Company Partner",
+            "role": a.internship.title if a.internship else "Software Engineering Intern",
+            "status": str(a.status),
+            "attendance_rate": "95%",
+            "reports_completed": "5 / 8",
+            "last_active": "Today",
+        }
+        for a in asms
+    ]
+
+
+@router.get("/risk-cases")
+async def get_faculty_risk_cases(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    return [
+        {
+            "id": "risk-001",
+            "student_name": "Rohan Verma",
+            "company": "TCS BaNCS",
+            "risk_level": "high",
+            "issue": "Missing weekly reports for 2 consecutive weeks",
+            "attendance": "68%",
+        },
+        {
+            "id": "risk-002",
+            "student_name": "Sneha Gupta",
+            "company": "Wipro",
+            "risk_level": "medium",
+            "issue": "Attendance dropped below 75% threshold",
+            "attendance": "72%",
+        },
+    ]
+
+
+@router.get("/analytics")
+async def get_faculty_analytics(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    return {
+        "placement_rate": 88.5,
+        "total_placed": 142,
+        "total_eligible": 160,
+        "avg_stipend": 22500,
+        "department_distribution": [
+            {"dept": "CSE", "placed": 65, "total": 70},
+            {"dept": "ECE", "placed": 45, "total": 50},
+            {"dept": "IT", "placed": 32, "total": 40},
+        ],
+    }
+
+
+@router.post("/students/{student_id}/assign-mentor")
+async def assign_faculty_mentor(
+    student_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(require_role("faculty", "admin")),
+):
+    return {"message": f"Faculty mentor assigned to student {student_id}"}

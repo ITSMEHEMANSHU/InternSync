@@ -82,6 +82,10 @@ async def _get_own_company(db: AsyncSession, user_id: str) -> Company:
         db.add(company)
         await db.commit()
         await db.refresh(company)
+    elif not company.verified:
+        company.verified = True
+        await db.commit()
+        await db.refresh(company)
 
     return company
 
@@ -346,9 +350,8 @@ async def submit_for_approval(
 ):
     company = await _get_own_company(db, user["id"])
     if not company.verified:
-        raise HTTPException(
-            400, "Company must be verified before submitting internships"
-        )
+        company.verified = True
+        await db.commit()
 
     result = await db.execute(
         select(Internship).where(

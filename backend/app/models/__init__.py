@@ -11,11 +11,17 @@ from app.models.internship import Internship
 from app.models.application import Application
 from app.models.policy import Policy
 from app.models.audit_log import AuditLog
+from app.models.assignment import Assignment
+from app.models.attendance import Attendance
+from app.models.task import Task, TaskLog
+from app.models.weekly_report import WeeklyReport
+from app.models.feedback import Feedback
 
 __all__ = [
     "UserRole", "UserStatus", "InternshipStatus", "ApplicationStatus",
     "AssignmentStatus", "AttendanceStatus", "TaskStatus", "ReportStatus",
     "DocumentType", "DocumentStatus", "RiskLevel", "NotificationType",
     "Institute", "Role", "User", "Company", "Internship", "Application",
-    "Policy", "AuditLog",
+    "Policy", "AuditLog", "Assignment", "Attendance", "Task", "TaskLog",
+    "WeeklyReport", "Feedback",
 ]

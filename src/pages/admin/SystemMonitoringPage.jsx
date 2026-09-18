@@ -8,8 +8,8 @@ const SystemMonitoringPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     adminService
       .getSystemMonitoring()
@@ -19,8 +19,8 @@ const SystemMonitoringPage = () => {
   };
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 30000);
+    load(false);
+    const id = setInterval(() => load(true), 30000);
     return () => clearInterval(id);
   }, []);
 

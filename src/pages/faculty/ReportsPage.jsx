@@ -6,10 +6,11 @@ import FilterBar from '../../components/common/FilterBar.jsx';
 import DataTable from '../../components/common/DataTable.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import AIMatchBadge from '../../components/common/AIMatchBadge.jsx';
-import { WEEKLY_KPI_METRICS, EVALUATED_REPORTS } from '../../data/mockData.js';
+import { useWeeklyReports } from '../../hooks/useWeeklyReports.js';
 
 const ReportsPage = () => {
   const { toast } = useToast();
+  const { reports, loading, reload } = useWeeklyReports();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState({});
 
@@ -23,19 +24,13 @@ const ReportsPage = () => {
   ];
 
   const filters = [
-    { key: 'status', label: 'Status', options: ['pending', 'evaluated', 'approved'] },
+    { key: 'status', label: 'Status', options: ['pending', 'evaluated', 'submitted', 'approved'] },
     { key: 'week', label: 'Week', options: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'] },
   ];
 
-  const mockReports = [
-    { id: 'RPT-001', student: 'Aarav Sharma', week: 'W7', company: 'Zoho Corp', score: 9.6, status: 'evaluated' },
-    { id: 'RPT-002', student: 'Priya Patel', week: 'W7', company: 'TCS', score: 8.8, status: 'evaluated' },
-    { id: 'RPT-003', student: 'Rohan Verma', week: 'W6', company: 'Infosys', score: null, status: 'pending' },
-    { id: 'RPT-004', student: 'Sneha Reddy', week: 'W7', company: 'Wipro', score: 9.2, status: 'evaluated' },
-  ];
-
-  const filteredReports = mockReports.filter(report => {
-    if (searchQuery && !report.student.toLowerCase().includes(searchQuery.toLowerCase())) {
+  const filteredReports = reports.filter(report => {
+    const studentName = report.student_name || report.student || 'Student';
+    if (searchQuery && !studentName.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
     if (selectedFilters.status && report.status !== selectedFilters.status) {
@@ -44,35 +39,42 @@ const ReportsPage = () => {
     return true;
   });
 
-  const data = filteredReports.map(report => ({
-    student: report.student,
-    week: report.week,
-    company: report.company,
-    score: report.score ? (
-      <div className="flex items-center gap-2">
-        <span className="font-body-md text-body-md font-semibold text-primary">{report.score}</span>
-        <AIMatchBadge match={Math.round(report.score * 10)} />
-      </div>
-    ) : '-',
-    status: <StatusBadge status={report.status} />,
-    actions: (
-      <button
-        onClick={() => toast.info('Opening report details...')}
-        className="px-3 py-1.5 bg-primary-container text-on-primary font-label-sm text-label-sm font-semibold rounded-lg hover:bg-primary-container/80"
-      >
-        Review
-      </button>
-    ),
-  }));
+  const data = filteredReports.map(report => {
+    const sName = report.student_name || report.student || 'Student';
+    const weekNum = report.week_number ? `W${report.week_number}` : (report.week || 'W1');
+    const compName = report.company || 'Assigned Internship';
+    const scoreVal = report.score ?? (report.kpis ? 9.0 : null);
+
+    return {
+      student: sName,
+      week: weekNum,
+      company: compName,
+      score: scoreVal ? (
+        <div className="flex items-center gap-2">
+          <span className="font-body-md text-body-md font-semibold text-primary">{scoreVal}</span>
+          <AIMatchBadge match={Math.round(scoreVal * 10)} />
+        </div>
+      ) : '-',
+      status: <StatusBadge status={report.status || 'submitted'} />,
+      actions: (
+        <button
+          onClick={() => toast.info(`Reviewing report for ${sName} (${weekNum})`)}
+          className="px-3 py-1.5 bg-primary-container text-on-primary font-label-sm text-label-sm font-semibold rounded-lg hover:bg-primary-container/80"
+        >
+          Review
+        </button>
+      ),
+    };
+  });
 
   return (
     <div className="flex flex-col w-full">
       <PageHeader
         title="Weekly Reports"
         breadcrumb="Reports"
-        badge={<StatusBadge status="In Progress" />}
+        badge={<StatusBadge status="Active" />}
         actions={[
-          { label: 'Export CSV', primary: false },
+          { label: 'Export CSV', primary: false, onClick: reload },
           { label: 'Compare View', primary: true },
         ]}
       />
@@ -91,15 +93,19 @@ const ReportsPage = () => {
           />
         </div>
 
-        <DataTable
-          columns={columns}
-          data={data}
-          sortable
-          pagination
-        />
+        {loading ? (
+          <div className="p-8 text-center text-on-surface-variant font-body-md">Loading Reports...</div>
+        ) : (
+          <DataTable
+            columns={columns}
+            data={data}
+            sortable
+            pagination
+          />
+        )}
       </div>
     </div>
   );
 };
 
-export default ReportsPage;
+export default ReportsPage;

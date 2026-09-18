@@ -14,8 +14,7 @@ import { useCompanyApplicants } from '../../hooks/useCompanyApplicants.js';
 const CompanyApplicantsPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [localOverrides, setLocalOverrides] = useState({});
 
   const { applicants: apiApplicants, loading, actingId, updateStatus } =
     useCompanyApplicants(statusFilter);
@@ -35,9 +34,12 @@ const CompanyApplicantsPage = () => {
           appliedAt: app.applied_at
             ? new Date(app.applied_at).toLocaleDateString()
             : 'Recently',
-          status: app.status,
+          status: localOverrides[app.id] || app.status,
         }))
-      : APPLICANTS_LIST;
+      : APPLICANTS_LIST.map((app) => ({
+          ...app,
+          status: localOverrides[app.id] || app.status,
+        }));
 
   const filtered = rawList.filter((app) => {
     const matchesSearch =
@@ -51,9 +53,8 @@ const CompanyApplicantsPage = () => {
 
   const handleAction = async (id, newStatus) => {
     try {
-      if (apiApplicants && apiApplicants.some((a) => a.id === id)) {
-        await updateStatus(id, newStatus);
-      }
+      await updateStatus(id, newStatus);
+      setLocalOverrides((prev) => ({ ...prev, [id]: newStatus }));
       toast.success(`Applicant status updated to '${newStatus}'`);
     } catch (err) {
       toast.error(err?.message || 'Failed to update status');

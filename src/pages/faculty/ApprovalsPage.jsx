@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFacultyApprovals } from '../../hooks/useFacultyApprovals.js';
 import { useToast } from '../../store/ToastContext.jsx';
-import { facultyService } from '../../services/api.js';
+import { facultyService } from '../../services/facultyService.js';
 import { ROUTES } from '../../constants/routes.js';
 import DataTable from '../../components/common/DataTable.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';

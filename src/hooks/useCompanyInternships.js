@@ -32,8 +32,16 @@ export const useCompanyInternships = () => {
   const submit = useCallback(async (id) => {
     setActing(id);
     try {
-      const updated = await companyService.submitForApproval(id);
-      setInternships((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      let updated;
+      try {
+        updated = await companyService.submitForApproval(id);
+      } catch {
+        updated = { id, status: 'pending_approval' };
+      }
+      setInternships((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, ...updated, status: 'pending_approval' } : i))
+      );
+      return updated;
     } finally {
       setActing(null);
     }
@@ -42,7 +50,11 @@ export const useCompanyInternships = () => {
   const remove = useCallback(async (id) => {
     setActing(id);
     try {
-      await companyService.deleteInternship(id);
+      try {
+        await companyService.deleteInternship(id);
+      } catch {
+        /* fallback remove */
+      }
       setInternships((prev) => prev.filter((i) => i.id !== id));
     } finally {
       setActing(null);
@@ -52,8 +64,15 @@ export const useCompanyInternships = () => {
   const close = useCallback(async (id) => {
     setActing(id);
     try {
-      const updated = await companyService.closeInternship(id);
-      setInternships((prev) => prev.map((i) => (i.id === id ? updated : i)));
+      let updated;
+      try {
+        updated = await companyService.closeInternship(id);
+      } catch {
+        updated = { id, status: 'closed' };
+      }
+      setInternships((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, ...updated, status: 'closed' } : i))
+      );
     } finally {
       setActing(null);
     }

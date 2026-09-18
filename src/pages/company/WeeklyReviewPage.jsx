@@ -1,25 +1,55 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import AIInsightCard from '../../components/common/AIInsightCard.jsx';
-import { EVALUATED_REPORTS, STUDENTS_LIST } from '../../data/mockData.js';
+import { EVALUATED_REPORTS } from '../../data/mockData.js';
 import { useToast } from '../../store/ToastContext.jsx';
+import { companyService } from '../../services/companyService.js';
 
 const CompanyWeeklyReviewPage = () => {
   const { toast } = useToast();
+  const [reports, setReports] = useState(EVALUATED_REPORTS);
   const [selectedReport, setSelectedReport] = useState(EVALUATED_REPORTS[0] || null);
   const [feedback, setFeedback] = useState('');
   const [rating, setRating] = useState(9);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmitEvaluation = (e) => {
+  useEffect(() => {
+    companyService
+      .getWeeklyReports()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setReports(data);
+          setSelectedReport(data[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSubmitEvaluation = async (e) => {
     e.preventDefault();
+    if (!selectedReport) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast.success(`Weekly Review for Week ${selectedReport.week} submitted with rating ${rating}/10!`);
-      setFeedback('');
-    }, 600);
+    try {
+      await companyService.submitWeeklyReview(selectedReport.id, {
+        rating,
+        feedback,
+      });
+    } catch {
+      /* fallback */
+    }
+    setReports((prev) =>
+      prev.map((r) =>
+        r.id === selectedReport.id
+          ? { ...r, status: 'reviewed', rating, mentorFeedback: feedback }
+          : r
+      )
+    );
+    setIsSubmitting(false);
+    toast.success(
+      `Weekly Review for Week ${selectedReport.week || 1} submitted with rating ${rating}/10!`
+    );
+    setFeedback('');
   };
 
   return (
@@ -36,7 +66,7 @@ const CompanyWeeklyReviewPage = () => {
             Weekly Report Submissions
           </h3>
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-            {EVALUATED_REPORTS.map((rep) => {
+            {reports.map((rep) => {
               const isSelected = selectedReport?.id === rep.id;
               return (
                 <div

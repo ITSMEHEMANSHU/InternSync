@@ -1,12 +1,57 @@
 import PageHeader from '../../components/weekly-reports/PageHeader.jsx';
 import StatCard from '../../components/common/StatCard.jsx';
 import RiskIndicator from '../../components/common/RiskIndicator.jsx';
-import { FACULTY_KPIS, RISK_CASES, APPROVALS_LIST } from '../../data/mockData.js';
 import BarChartCard from '../../components/common/charts/BarChartCard.jsx';
 import LineChartCard from '../../components/common/charts/LineChartCard.jsx';
 import DonutChartCard from '../../components/common/charts/DonutChartCard.jsx';
+import { useFacultyDashboard } from '../../hooks/useFacultyDashboard.js';
+import { useFacultyApprovals } from '../../hooks/useFacultyApprovals.js';
+import { useRiskCenter } from '../../hooks/useRiskCenter.js';
 
 const FacultyDashboardPage = () => {
+  const { stats, loading: statsLoading } = useFacultyDashboard();
+  const { approvals, loading: approvalsLoading } = useFacultyApprovals();
+  const { cases: riskCases, loading: riskLoading } = useRiskCenter();
+
+  const kpis = [
+    {
+      id: 'kpi-1',
+      label: 'Total Students',
+      value: stats?.total_students ?? 48,
+      icon: 'school',
+      iconBg: 'bg-primary-container text-on-primary-container',
+      trend: '+12%',
+      trendUp: true,
+    },
+    {
+      id: 'kpi-2',
+      label: 'Active Internships',
+      value: stats?.active_internships ?? 36,
+      icon: 'work',
+      iconBg: 'bg-tertiary-container text-on-tertiary-container',
+      trend: '+8%',
+      trendUp: true,
+    },
+    {
+      id: 'kpi-3',
+      label: 'Pending Approvals',
+      value: approvals?.length ?? (stats?.pending_approvals ?? 4),
+      icon: 'pending_actions',
+      iconBg: 'bg-secondary-container text-on-secondary-container',
+      trend: 'Action required',
+      trendUp: false,
+    },
+    {
+      id: 'kpi-4',
+      label: 'Risk Alerts',
+      value: riskCases?.length ?? (stats?.risk_alerts ?? 2),
+      icon: 'warning',
+      iconBg: 'bg-error-container text-on-error-container',
+      trend: 'Attention needed',
+      trendUp: false,
+    },
+  ];
+
   const placementData = [
     { month: 'Jun', placements: 8 },
     { month: 'Jul', placements: 12 },
@@ -17,9 +62,9 @@ const FacultyDashboardPage = () => {
   ];
 
   const roleData = [
-    { name: 'Placed', value: 36 },
+    { name: 'Placed', value: stats?.active_internships ?? 36 },
     { name: 'In Progress', value: 8 },
-    { name: 'Pending', value: 4 },
+    { name: 'Pending', value: approvals?.length ?? 4 },
   ];
 
   const attendanceData = [
@@ -30,6 +75,14 @@ const FacultyDashboardPage = () => {
     { week: 'W5', percent: 87 },
     { week: 'W6', percent: 92 },
   ];
+
+  if (statsLoading && approvalsLoading && riskLoading) {
+    return (
+      <div className="p-8 text-center text-on-surface-variant font-body-md">
+        Loading Faculty Dashboard...
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col w-full">
@@ -43,7 +96,7 @@ const FacultyDashboardPage = () => {
 
       {/* KPI Ribbon */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {FACULTY_KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <StatCard
             key={kpi.id}
             icon={kpi.icon}
@@ -64,24 +117,28 @@ const FacultyDashboardPage = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Risk Alerts</h3>
               <span className="px-2 py-1 bg-error-container text-on-error-container text-xs font-label-sm font-bold rounded">
-                {RISK_CASES.length} Active
+                {riskCases.length} Active
               </span>
             </div>
             <div className="space-y-3">
-              {RISK_CASES.slice(0, 2).map((risk) => (
-                <div key={risk.id} className="flex items-center justify-between p-4 bg-surface-container rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <RiskIndicator level={risk.risk} factors={risk.factors} />
-                    <div>
-                      <p className="font-body-md text-body-md font-semibold text-on-surface">{risk.studentName}</p>
-                      <p className="font-label-sm text-label-sm text-on-surface-variant">{risk.company}</p>
+              {riskCases.length === 0 ? (
+                <p className="text-body-sm text-on-surface-variant">No high-risk students reported.</p>
+              ) : (
+                riskCases.slice(0, 3).map((risk) => (
+                  <div key={risk.id} className="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <RiskIndicator level={risk.risk_level || risk.risk || 'medium'} factors={risk.issue ? [risk.issue] : (risk.factors || [])} />
+                      <div>
+                        <p className="font-body-md text-body-md font-semibold text-on-surface">{risk.student_name || risk.studentName}</p>
+                        <p className="font-label-sm text-label-sm text-on-surface-variant">{risk.company}</p>
+                      </div>
                     </div>
+                    <span className="font-label-sm text-label-sm text-error font-semibold">
+                      {risk.attendance ? `Attendance ${risk.attendance}` : `${risk.daysInactive || 3}d inactive`}
+                    </span>
                   </div>
-                  <span className="font-label-sm text-label-sm text-error font-semibold">
-                    {risk.daysInactive}d inactive
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -90,21 +147,25 @@ const FacultyDashboardPage = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Pending Approvals</h3>
               <span className="px-2 py-1 bg-secondary-container text-on-secondary-container text-xs font-label-sm font-bold rounded">
-                {APPROVALS_LIST.filter(a => a.status === 'pending').length} Pending
+                {approvals.length} Pending
               </span>
             </div>
             <div className="space-y-3">
-              {APPROVALS_LIST.filter(a => a.status === 'pending').slice(0, 3).map((approval) => (
-                <div key={approval.id} className="flex items-center justify-between p-4 bg-surface-container rounded-lg">
-                  <div>
-                    <p className="font-body-md text-body-md font-semibold text-on-surface">{approval.studentName}</p>
-                    <p className="font-label-sm text-label-sm text-on-surface-variant">{approval.type}</p>
+              {approvals.length === 0 ? (
+                <p className="text-body-sm text-on-surface-variant">No pending approval requests.</p>
+              ) : (
+                approvals.slice(0, 3).map((approval) => (
+                  <div key={approval.id} className="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+                    <div>
+                      <p className="font-body-md text-body-md font-semibold text-on-surface">{approval.student?.name || approval.studentName || 'Student Application'}</p>
+                      <p className="font-label-sm text-label-sm text-on-surface-variant">{approval.type || 'Internship NOC Request'}</p>
+                    </div>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant">
+                      {approval.applied_at ? new Date(approval.applied_at).toLocaleDateString() : (approval.submittedAt || 'Today')}
+                    </span>
                   </div>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant">
-                    {approval.submittedAt}
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -141,4 +202,4 @@ const FacultyDashboardPage = () => {
   );
 };
 
-export default FacultyDashboardPage;
+export default FacultyDashboardPage;
